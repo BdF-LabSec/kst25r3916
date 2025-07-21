@@ -49,6 +49,7 @@
 #define ST25R3916_Mask_IRQ(s, mask, op)							ST25R_SPI_Write_IRQ_Mask_Operation_internal((s), (mask), (op), MK_WRITE(ST25R3916_REG_IRQ_MASK_MAIN), ST25R_IRQ_CB_4)
 
 #define ST25R3916_Write_NoResponseTimer(s, v)					ST25R3916_Write_Registers2((s), MK_WRITE(ST25R3916_REG_NO_RESPONSE_TIMER1), __builtin_bswap16(v))
+#define ST25R3916_Write_GeneralPurposeTimer(s, v)				ST25R3916_Write_Registers2((s), MK_WRITE(ST25R3916_REG_GPT1), __builtin_bswap16(v))
 
 void ST25R3916_Init(ST25R *pInstance);
 void ST25R3916_WaitForIRQ(ST25R *pInstance);

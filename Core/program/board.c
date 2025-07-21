@@ -5,7 +5,7 @@
 uint8_t RAM_TRACE[TRACE_SIZE] = {0};
 uint32_t RAM_TRACE_CB = 0;
 
-__attribute__((section(".trace"))) const uint8_t FLASH_TRACE[TRACE_SIZE] = {TRACE_EVENT_INVALID};
+__attribute__((section(".trace"))) /*const */uint8_t FLASH_TRACE[TRACE_SIZE] = {TRACE_EVENT_INVALID};
 
 HAL_StatusTypeDef TRACE_FLASH_Erase()
 {

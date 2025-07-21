@@ -259,8 +259,7 @@ int main(void)
 											/*
 											 * Because EV2 XL, don't ask PPS too soon...
 											 */
-											ST25R3916_Write_SingleRegister(&nfc0, ST25R3916_REG_GPT1, 0x02);
-											ST25R3916_Write_SingleRegister(&nfc0, ST25R3916_REG_GPT2, 0x80);
+											ST25R3916_Write_GeneralPurposeTimer(&nfc0, 0x0380);
 											ST25R3916_DirectCommand(&nfc0, ST25R3916_CMD_START_GP_TIMER);
 											ST25R3916_WaitForIRQ(&nfc0);
 

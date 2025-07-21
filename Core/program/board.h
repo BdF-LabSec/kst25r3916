@@ -26,7 +26,7 @@ typedef enum _TRACE_EVENT_TYPE {
 	TRACE_EVENT_INVALID = 0xff,
 } TRACE_EVENT_TYPE, *PTRACE_EVENT_TYPE;
 
-__attribute__((section(".trace"))) extern const uint8_t FLASH_TRACE[TRACE_SIZE];
+__attribute__((section(".trace"))) extern /*const */uint8_t FLASH_TRACE[TRACE_SIZE];
 
 void TRACE_Add_Event(TRACE_EVENT_TYPE type, const uint8_t *pbData, const uint16_t cbData);
 void TRACE_Flash_Describe();
