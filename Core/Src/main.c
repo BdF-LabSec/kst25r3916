@@ -137,7 +137,7 @@ int main(void)
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
 	puts(KIWI_BANNER);
-	printf("Device ID   : 0x%04x rev: 0x%04x\r\n", (uint16_t )HAL_GetDEVID(), (uint16_t ) HAL_GetREVID());
+	//printf("Device ID   : 0x%04x rev: 0x%04x\r\n", (uint16_t )HAL_GetDEVID(), (uint16_t ) HAL_GetREVID());
 	printf("Flash size  : %hu Kbytes\r\n", *(const uint16_t*)FLASHSIZE_BASE);
 	printf("Device UID  : 0x%08lx%08lx%08lx\r\n", HAL_GetUIDw0(), HAL_GetUIDw1(), HAL_GetUIDw2());
 	printf("SysClockFreq: %lu MHz\r\n\r\n", HAL_RCC_GetSysClockFreq() / 1000 / 1000);
