@@ -39,8 +39,10 @@ void TRACE_Add_Event(TRACE_EVENT_TYPE type, const uint8_t *pbData, const uint16_
 {
 	if((type == TRACE_EVENT_TYPE_DATA_IN) || (type == TRACE_EVENT_TYPE_DATA_OUT))
 	{
-		if((RAM_TRACE_CB + 1 + 1 + cbData + 1) <= sizeof(RAM_TRACE)) // + 1 field for Invalid when saving
+		if((RAM_TRACE_CB + sizeof(uint32_t) + 1 + 1 + cbData + 1) <= sizeof(RAM_TRACE)) // + 1 field for Invalid when saving
 		{
+			*(uint32_t *) (RAM_TRACE + RAM_TRACE_CB) = HAL_GetTick();
+			RAM_TRACE_CB += sizeof(uint32_t);
 			RAM_TRACE[RAM_TRACE_CB++] = type;
 			RAM_TRACE[RAM_TRACE_CB++] = (uint8_t) cbData;
 			memcpy(RAM_TRACE + RAM_TRACE_CB, pbData, cbData);
@@ -49,8 +51,10 @@ void TRACE_Add_Event(TRACE_EVENT_TYPE type, const uint8_t *pbData, const uint16_
 	}
 	else if(type == TRACE_EVENT_TYPE_RAW_IRQ)
 	{
-		if((RAM_TRACE_CB + 1 + sizeof(uint32_t) + 1) <= sizeof(RAM_TRACE)) // + 1 field for Invalid when saving
+		if((RAM_TRACE_CB + sizeof(uint32_t) + 1 + sizeof(uint32_t) + 1) <= sizeof(RAM_TRACE)) // + 1 field for Invalid when saving
 		{
+			*(uint32_t *) (RAM_TRACE + RAM_TRACE_CB) = HAL_GetTick();
+			RAM_TRACE_CB += sizeof(uint32_t);
 			RAM_TRACE[RAM_TRACE_CB++] = type;
 			*(uint32_t *) (RAM_TRACE + RAM_TRACE_CB) = *(uint32_t *) pbData;
 			RAM_TRACE_CB += sizeof(uint32_t);
@@ -58,8 +62,10 @@ void TRACE_Add_Event(TRACE_EVENT_TYPE type, const uint8_t *pbData, const uint16_
 	}
 	else
 	{
-		if((RAM_TRACE_CB + 1 + 1) <= sizeof(RAM_TRACE)) // + 1 field for Invalid when saving
+		if((RAM_TRACE_CB + sizeof(uint32_t) + 1 + 1) <= sizeof(RAM_TRACE)) // + 1 field for Invalid when saving
 		{
+			*(uint32_t *) (RAM_TRACE + RAM_TRACE_CB) = HAL_GetTick();
+			RAM_TRACE_CB += sizeof(uint32_t);
 			RAM_TRACE[RAM_TRACE_CB++] = type;
 		}
 	}
@@ -90,6 +96,9 @@ void TRACE_Flash_Describe()
 
 	for(i = 0; (i < sizeof(FLASH_TRACE)) && (FLASH_TRACE[i] != TRACE_EVENT_INVALID); )
 	{
+		printf("%lu\t", *(uint32_t *) (FLASH_TRACE + i));
+		i += sizeof(uint32_t);
+
 		switch(FLASH_TRACE[i])
 		{
 		case TRACE_EVENT_TYPE_AC:

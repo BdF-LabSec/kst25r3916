@@ -5,9 +5,9 @@
 */
 #include "14a4_initiator.h"
 
-uint8_t K14A4_Rats(ST25R *pInstance)
+uint8_t K14A4_Rats(ST25R *pInstance, const uint8_t parameters)
 {
-	uint8_t ret, buffer[2] = {K14A_RATS, 5 << 4};// 64 instead of 256 - 0x80};
+	uint8_t ret, buffer[2] = {K14A_RATS, parameters};//>5 << 4};// 64 instead of 256 - 0x80};
     ret = ST25R3916_Transmit_then_Receive(pInstance, buffer, sizeof(buffer), 1);
     if(ret == ST25R_STATUS_NO_ERROR)
     {

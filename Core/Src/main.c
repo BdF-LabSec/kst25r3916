@@ -225,44 +225,41 @@ int main(void)
 
 							if(nfc1.irqStatus & (ST25R3916_IRQ_MASK_WU_A | ST25R3916_IRQ_MASK_WU_A_X))
 							{
+								TRACE_Add_Event(TRACE_EVENT_TYPE_AC, NULL, 0);
 								ST25R3916_Mask_IRQ(&nfc1, ST25R3916_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_DEL);
 								ST25R3916_DirectCommand(&nfc1, ST25R3916_CMD_CLEAR_FIFO);
 								tgState = TARGET_STATE_T3;
-								TRACE_Add_Event(TRACE_EVENT_TYPE_AC, NULL, 0);
 							}
 							else if(nfc1.irqStatus & ST25R3916_IRQ_MASK_RXE)
 							{
 								ST25R3916_Receive(&nfc1, 1);
 								if(nfc1.cbData)
 								{
+									TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_IN, nfc1.pbData, nfc1.cbData);
 									if ((nfc1.cbData == 2) && (nfc1.pbData[0] == K14A_HLTA) && (nfc1.pbData[1] == K14A_HLTA_2))
 									{
-										TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_IN, nfc1.pbData, nfc1.cbData);
 										break;
 									}
 									else if ((nfc1.cbData == 1) && (nfc1.pbData[0] == K14A_DESELECT))
 									{
 										const uint8_t myDeselect = K14A_DESELECT;
 										ST25R3916_Transmit(&nfc1, &myDeselect, sizeof(myDeselect), 1);
-										TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_IN, nfc1.pbData, nfc1.cbData);
 										TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_OUT, &myDeselect, sizeof(myDeselect));
 										break;
 									}
 									else if ((nfc1.cbData == 2) && (nfc1.pbData[0] == K14A_RATS))
 									{
 										ST25R3916_Transmit(&nfc1, tgInfos.ATS, tgInfos.cbATS, 1);
-										TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_IN, nfc1.pbData, nfc1.cbData);
 										TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_OUT, tgInfos.ATS, tgInfos.cbATS);
-										ret = K14A4_Rats(&nfc0);
+										ret = K14A4_Rats(&nfc0, nfc1.pbData[1]);
 										if(ret == ST25R_STATUS_NO_ERROR)
 										{
-											/*
-											 * Because EV2 XL, don't ask PPS too soon...
-											 */
-											ST25R3916_Write_GeneralPurposeTimer(&nfc0, 0x0380);
-											ST25R3916_DirectCommand(&nfc0, ST25R3916_CMD_START_GP_TIMER);
-											ST25R3916_WaitForIRQ(&nfc0);
-
+//											/*
+//											 * Because EV2 XL, don't ask PPS too soon...
+//											 */
+//											ST25R3916_Write_GeneralPurposeTimer(&nfc0, 0x0380);
+//											ST25R3916_DirectCommand(&nfc0, ST25R3916_CMD_START_GP_TIMER);
+//											ST25R3916_WaitForIRQ(&nfc0);
 											K14A4_AdjustBitRate(&nfc0, &tgInfos, ST25R_BITRATE_848);
 											tgState = TARGET_STATE_T4;
 										}
@@ -270,7 +267,6 @@ int main(void)
 									else
 									{
 										ret = ST25R3916_Transmit_then_Receive(&nfc0, nfc1.pbData, nfc1.cbData, 1);
-										TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_IN, nfc1.pbData, nfc1.cbData);
 										if(ret == ST25R_STATUS_NO_ERROR)
 										{
 											ST25R3916_Transmit(&nfc1, nfc0.pbData, nfc0.cbData, 1);

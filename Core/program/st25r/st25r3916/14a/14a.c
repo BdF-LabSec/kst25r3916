@@ -11,7 +11,7 @@ uint8_t K14A_Anticoll(ST25R *pInstance, T4A_INFOS *infos)
 		if (infos->t3a.SAK & 0x20)
 		{
 			infos->CurrentBitrate = ST25R_BITRATE_106;
-			ret = K14A4_Rats(pInstance);
+			ret = K14A4_Rats(pInstance, 0x50); // 64 b, CID 0
 			if (ret == ST25R_STATUS_NO_ERROR)
 			{
 				if (pInstance->cbData <= sizeof(infos->ATS))
