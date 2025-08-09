@@ -1,3 +1,8 @@
+/*  Benjamin DELPY `gentilkiwi`
+    https://blog.gentilkiwi.com
+    benjamin@gentilkiwi.com
+    Licence : https://creativecommons.org/licenses/by/4.0/
+*/
 #include "st25r3916.h"
 
 void ST25R3916_Init(ST25R *pInstance) // 4.1 # Power-on sequence
@@ -31,7 +36,7 @@ void ST25R3916_Init(ST25R *pInstance) // 4.1 # Power-on sequence
 void ST25R3916_WaitForIRQ(ST25R *pInstance)
 {
 	while(!pInstance->irqFlag);
-	//pInstance->irqFlag = 0;
+	pInstance->irqFlag = 0;
 	ST25R3916_Read_IRQ(pInstance);
 }
 
@@ -61,32 +66,32 @@ uint8_t ST25R3916_Generic_IRQ_toErr(uint32_t irq)
 	return status;
 }
 
+uint8_t ST25R3916_WaitFor_SpecificIRQ(ST25R *pInstance, uint32_t SpecificIRQ)
+{
+	uint8_t ret;
+	ST25R3916_WaitForIRQ(pInstance);
+	ret = ST25R3916_Generic_IRQ_toErr(pInstance->irqStatus);
+	if((ret == ST25R_STATUS_NO_ERROR) && !(pInstance->irqStatus & SpecificIRQ))
+	{
+		ret = ST25T_STATUS_OTHER_IRQ;
+	}
+
+	return ret;
+}
+
 uint8_t ST25R3916_FieldOn_AC(ST25R *pInstance)
 {
 	uint8_t ret;
 
 	ST25R3916_DirectCommand(pInstance, ST25R3916_CMD_INITIAL_RF_COLLISION);
-	ST25R3916_WaitForIRQ(pInstance);
-	if(pInstance->irqStatus & ST25R3916_IRQ_MASK_CAC)
+	ret = ST25R3916_WaitFor_SpecificIRQ(pInstance, ST25R3916_IRQ_MASK_APON);
+	if(ret == ST25R_STATUS_NO_ERROR)
 	{
-		ret = ST25R_STATUS_COLLISION;
-	}
-	else if(pInstance->irqStatus & ST25R3916_IRQ_MASK_APON)
-	{
-		ST25R3916_WaitForIRQ(pInstance);
-		if(pInstance->irqStatus & ST25R3916_IRQ_MASK_CAT)
+		ret = ST25R3916_WaitFor_SpecificIRQ(pInstance, ST25R3916_IRQ_MASK_CAT);
+		if(ret == ST25R_STATUS_NO_ERROR)
 		{
 			ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_OP_CONTROL, ST25R3916_REG_OP_CONTROL_en | ST25R3916_REG_OP_CONTROL_en_fd_efd_off | ST25R3916_REG_OP_CONTROL_rx_en | ST25R3916_REG_OP_CONTROL_tx_en);
-			ret = ST25R_STATUS_NO_ERROR;
 		}
-		else
-		{
-			ret = ST25R3916_Generic_IRQ_toErr(pInstance->irqStatus);
-		}
-	}
-	else
-	{
-		ret = ST25T_STATUS_OTHER_IRQ;
 	}
 
 	return ret;
@@ -99,7 +104,7 @@ void ST25R3916_FieldOff(ST25R *pInstance)
 
 uint16_t ST25R3916_Fifo_Status(ST25R * pInstance, uint8_t *pStatus2)
 {
-	uint8_t buff[3] = {MK_READ(ST25R3916_REG_FIFO_STATUS1), };
+	uint8_t buff[3] = {ST25R3916_MK_READ(ST25R3916_REG_FIFO_STATUS1), };
 
 	ST25R_SPI_COMM_ACQUIRE(pInstance);
 	ST25R_SPI_COMM_TRANSMIT_RECEIVE(pInstance, buff, sizeof(buff));
@@ -113,19 +118,36 @@ uint16_t ST25R3916_Fifo_Status(ST25R * pInstance, uint8_t *pStatus2)
 	return ((buff[2] & ST25R3916_REG_FIFO_STATUS2_fifo_b_mask) << 2) | buff[1];;
 }
 
-void ST25R3916_Transmit(ST25R *pInstance, const uint8_t *pbData, const uint16_t cbData, const uint8_t bWithCRC)
+uint8_t ST25R3916_Transmit_NoIRQ(ST25R *pInstance, const uint8_t *pbData, const uint16_t cbData, const uint8_t bWithCRC)
 {
-	uint8_t buff[] = {MK_WRITE(ST25R3916_REG_NUM_TX_BYTES1), cbData >> (8 - 3), cbData << 3};
+	uint8_t buff[] = {ST25R3916_MK_WRITE(ST25R3916_REG_NUM_TX_BYTES1), cbData >> (8 - 3), cbData << 3}, ret = ST25R_STATUS_NO_ERROR;
 	ST25R_SPI_COMM_ACQUIRE(pInstance);
 	ST25R_SPI_COMM_TRANSMIT(pInstance, buff, sizeof(buff));
 	ST25R_SPI_COMM_RELEASE(pInstance);
 	ST25R3916_Fifo_Load(pInstance, pbData, cbData);
 
-	ST25R_SPI_DirectCommand_internal(pInstance, bWithCRC ? MK_CMD(ST25R3916_CMD_TRANSMIT_WITH_CRC) : MK_CMD(ST25R3916_CMD_TRANSMIT_WITHOUT_CRC));
+	ST25R_SPI_DirectCommand_internal(pInstance, bWithCRC ? ST25R3916_MK_CMD(ST25R3916_CMD_TRANSMIT_WITH_CRC) : ST25R3916_MK_CMD(ST25R3916_CMD_TRANSMIT_WITHOUT_CRC));
+
+	return ret;
 }
 
-void ST25R3916_Receive(ST25R *pInstance, const uint8_t bWithCRC)
+uint8_t ST25R3916_Transmit(ST25R *pInstance, const uint8_t *pbData, const uint16_t cbData, const uint8_t bWithCRC)
 {
+	uint8_t ret;
+
+	ret = ST25R3916_Transmit_NoIRQ(pInstance, pbData, cbData, bWithCRC);
+	if(ret == ST25R_STATUS_NO_ERROR)
+	{
+		ret = ST25R3916_WaitFor_SpecificIRQ(pInstance, ST25R3916_IRQ_MASK_TXE);
+	}
+
+	return ret;
+}
+
+uint8_t ST25R3916_Receive_NoIRQ(ST25R *pInstance, const uint8_t bWithCRC)
+{
+	uint8_t ret;
+
 	pInstance->cbData = ST25R3916_Fifo_Status(pInstance, NULL);
 	if(pInstance->cbData && (pInstance->cbData <= sizeof(pInstance->pbData)))
 	{
@@ -134,234 +156,61 @@ void ST25R3916_Receive(ST25R *pInstance, const uint8_t bWithCRC)
 		{
 			pInstance->cbData -= 2;
 		}
+
+		ret = ST25R_STATUS_NO_ERROR;
 	}
+	else
+	{
+		ret = ST25T_STATUS_BUFFER_ERR;
+	}
+
+	return ret;
+}
+
+uint8_t ST25R3916_Receive(ST25R *pInstance, const uint8_t bWithCRC)
+{
+	uint8_t ret;
+
+	pInstance->cbData = 0;
+	ret = ST25R3916_WaitFor_SpecificIRQ(pInstance, ST25R3916_IRQ_MASK_RXE);
+	if(ret == ST25R_STATUS_NO_ERROR)
+	{
+		ret = ST25R3916_Receive_NoIRQ(pInstance, bWithCRC);
+	}
+
+	return ret;
 }
 
 uint8_t ST25R3916_Transmit_then_Receive(ST25R *pInstance, const uint8_t *pbData, const uint16_t cbData, const uint8_t bWithCRC)
 {
 	uint8_t ret;
 
-	pInstance->cbData = 0;
 	if(pbData && cbData)
 	{
-		ST25R3916_Transmit(pInstance, pbData, cbData, bWithCRC);
+		ret = ST25R3916_Transmit(pInstance, pbData, cbData, bWithCRC);
 	}
-	ST25R3916_WaitForIRQ(pInstance);
-	ret = ST25R3916_Generic_IRQ_toErr(pInstance->irqStatus);
+	else // Specific for WUPA/REQA
+	{
+		ret = ST25R3916_WaitFor_SpecificIRQ(pInstance, ST25R3916_IRQ_MASK_TXE);
+	}
+
 	if(ret == ST25R_STATUS_NO_ERROR)
 	{
-		if(pInstance->irqStatus & ST25R3916_IRQ_MASK_RXE)
-		{
-			ST25R3916_Receive(pInstance, bWithCRC);
-		}
-		else
-		{
-			ret = ST25T_STATUS_OTHER_IRQ;
-		}
+		ret = ST25R3916_Receive(pInstance, bWithCRC);
 	}
 
 	return ret;
 }
 
-void ST25R3916_14A_Initiator(ST25R *pInstance)
-{
-	ST25R3916_Mask_IRQ(pInstance, ST25R3916_IRQ_MASK_TXE | ST25R3916_IRQ_MASK_RXS, ST25R_IRQ_MASK_OP_ADD);
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_MASK_RX_TIMER, 0x0e);
-	//ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_NO_RESPONSE_TIMER2, 0x23); //
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TIMER_EMV_CONTROL, /*ST25R3916_REG_TIMER_EMV_CONTROL_gptc1 | ST25R3916_REG_TIMER_EMV_CONTROL_gptc0| */ST25R3916_REG_TIMER_EMV_CONTROL_nrt_step_64fc);
-	ST25R3916_Write_Registers2_sep(pInstance, ST25R3916_REG_ANT_TUNE_A,
-			0x82,
-			0x82
-	);
-	ST25R3916_Write_Registers2_sep(pInstance, ST25R3916_REG_FIELD_THRESHOLD_ACTV,
-			ST25R3916_REG_FIELD_THRESHOLD_ACTV_trg_105mV | ST25R3916_REG_FIELD_THRESHOLD_ACTV_rfe_105mV,
-			ST25R3916_REG_FIELD_THRESHOLD_DEACTV_trg_75mV | ST25R3916_REG_FIELD_THRESHOLD_DEACTV_rfe_75mV
-	);
-	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_FIELD_ON_GT, 0x40);//0x06); // TODO bi techno
 
-	ST25R3916_14A4_TxRx106(pInstance);
-}
 
-void ST25R3916_14A_Target(ST25R *pInstance)
-{
-	ST25R3916_Mask_IRQ(pInstance, ST25R3916_IRQ_MASK_TXE | ST25R3916_IRQ_MASK_RXS, ST25R_IRQ_MASK_OP_ADD);
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_MASK_RX_TIMER, 0x02);
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TIMER_EMV_CONTROL, /*ST25R3916_REG_TIMER_EMV_CONTROL_gptc1 | ST25R3916_REG_TIMER_EMV_CONTROL_gptc0| */ST25R3916_REG_TIMER_EMV_CONTROL_nrt_step_64fc);
-	ST25R3916_Write_Registers2_sep(pInstance, ST25R3916_REG_ANT_TUNE_A,
-			0x00,
-			0xff
-	);
-	ST25R3916_Write_Registers2_sep(pInstance, ST25R3916_REG_FIELD_THRESHOLD_ACTV,
-			ST25R3916_REG_FIELD_THRESHOLD_ACTV_trg_105mV | ST25R3916_REG_FIELD_THRESHOLD_ACTV_rfe_105mV,
-			ST25R3916_REG_FIELD_THRESHOLD_DEACTV_trg_75mV | ST25R3916_REG_FIELD_THRESHOLD_DEACTV_rfe_75mV
-	);
 
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_PASSIVE_TARGET, 5 << ST25R3916_REG_PASSIVE_TARGET_fdel_shift);
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_PT_MOD, (5 << ST25R3916_REG_PT_MOD_ptm_res_shift) | (15 << ST25R3916_REG_PT_MOD_pt_res_shift));
 
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TX_DRIVER, ST25R3916_REG_TX_DRIVER_am_mod_12percent | 0);
-}
 
-//    /* Mode Name: POLL_A_ANTICOL, Mode ID: 0x0103 */
-//        ST25R3916_REG_B_CORR_CONF1,0x40,0x00  /* User Defined ; Set collision detection level different from data */
-void ST25R3916_14A4_TxRx106(ST25R *pInstance)
-{
-	ST25R3916_Write_Registers2_sep(pInstance, ST25R3916_REG_MODE,
-			ST25R3916_REG_MODE_om_iso14443a | ST25R3916_REG_MODE_tr_am_ook,
-			ST25R3916_REG_BIT_RATE_txrate_106 | ST25R3916_REG_BIT_RATE_rxrate_106
-	);
-
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TX_DRIVER, ST25R3916_REG_TX_DRIVER_am_mod_12percent | 0);
-
-	ST25R3916_Write_RegistersB4_sep(pInstance, ST25R3916_REG_B_OVERSHOOT_CONF1, \
-			ST25R3916_REG_OVERSHOOT_CONF1_ov_tx_mode0,
-			ST25R3916_REG_OVERSHOOT_CONF2_ov_pattern1 | ST25R3916_REG_OVERSHOOT_CONF2_ov_pattern0,
-			ST25R3916_REG_UNDERSHOOT_CONF1_un_tx_mode0,
-			ST25R3916_REG_UNDERSHOOT_CONF2_un_pattern1 | ST25R3916_REG_UNDERSHOOT_CONF2_un_pattern0
-	);
-
-	ST25R3916_Write_Registers4_sep(pInstance, ST25R3916_REG_RX_CONF1,
-			ST25R3916_REG_RX_CONF1_hz_600_400khz,
-			ST25R3916_REG_RX_CONF2_sqm_dyn | ST25R3916_REG_RX_CONF2_agc_en | ST25R3916_REG_RX_CONF2_agc_m | ST25R3916_REG_RX_CONF2_agc6_3,
-			0,
-			0
-	);
-
-	ST25R3916_Write_RegistersB2_sep(pInstance, ST25R3916_REG_B_CORR_CONF1, \
-			ST25R3916_REG_CORR_CONF1_corr_s6 | ST25R3916_REG_CORR_CONF1_corr_s4 | ST25R3916_REG_CORR_CONF1_corr_s0,
-			0
-	);
-}
-
-void ST25R3916_14A4_TxRx212(ST25R *pInstance)
-{
-	ST25R3916_Write_Registers2_sep(pInstance, ST25R3916_REG_MODE,
-			ST25R3916_REG_MODE_om_iso14443a | ST25R3916_REG_MODE_tr_am_am,
-			ST25R3916_REG_BIT_RATE_txrate_212 | ST25R3916_REG_BIT_RATE_rxrate_212
-	);
-
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TX_DRIVER, ST25R3916_REG_TX_DRIVER_am_mod_12percent | 0);
-	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_AUX_MOD, ST25R3916_REG_AUX_MOD_dis_reg_am | ST25R3916_REG_AUX_MOD_lm_dri | ST25R3916_REG_AUX_MOD_res_am | 0);
-	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_RES_AM_MOD, ST25R3916_REG_RES_AM_MOD_fa3_f | 0x7f);
-
-	ST25R3916_Write_RegistersB4_sep(pInstance, ST25R3916_REG_B_OVERSHOOT_CONF1, \
-			ST25R3916_REG_OVERSHOOT_CONF1_ov_tx_mode0,
-			ST25R3916_REG_OVERSHOOT_CONF2_ov_pattern1 | ST25R3916_REG_OVERSHOOT_CONF2_ov_pattern0,
-			ST25R3916_REG_UNDERSHOOT_CONF1_un_tx_mode0,
-			ST25R3916_REG_UNDERSHOOT_CONF2_un_pattern1 | ST25R3916_REG_UNDERSHOOT_CONF2_un_pattern0
-	);
-
-	ST25R3916_Write_Registers4_sep(pInstance, ST25R3916_REG_RX_CONF1,
-			ST25R3916_REG_RX_CONF1_hz_40_80khz,
-			ST25R3916_REG_RX_CONF2_sqm_dyn | ST25R3916_REG_RX_CONF2_pulz_61 | ST25R3916_REG_RX_CONF2_agc_en | ST25R3916_REG_RX_CONF2_agc_m | ST25R3916_REG_RX_CONF2_agc6_3,
-			0,
-			0
-	);
-
-	ST25R3916_Write_RegistersB2_sep(pInstance, ST25R3916_REG_B_CORR_CONF1, \
-			ST25R3916_REG_CORR_CONF1_corr_s4 | ST25R3916_REG_CORR_CONF1_corr_s2,
-			0
-	);
-}
-
-void ST25R3916_14A4_TxRx424(ST25R *pInstance)
-{
-	ST25R3916_Write_Registers2_sep(pInstance, ST25R3916_REG_MODE,
-			ST25R3916_REG_MODE_om_iso14443a | ST25R3916_REG_MODE_tr_am_am,
-			ST25R3916_REG_BIT_RATE_txrate_424 | ST25R3916_REG_BIT_RATE_rxrate_424
-	);
-
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TX_DRIVER, ST25R3916_REG_TX_DRIVER_am_mod_12percent | 0);
-	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_AUX_MOD, ST25R3916_REG_AUX_MOD_dis_reg_am | ST25R3916_REG_AUX_MOD_lm_dri | ST25R3916_REG_AUX_MOD_res_am | 0);
-	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_RES_AM_MOD, ST25R3916_REG_RES_AM_MOD_fa3_f | 0x7f);
-
-	ST25R3916_Write_RegistersB4_sep(pInstance, ST25R3916_REG_B_OVERSHOOT_CONF1, \
-			ST25R3916_REG_OVERSHOOT_CONF1_ov_tx_mode0,
-			ST25R3916_REG_OVERSHOOT_CONF2_ov_pattern1 | ST25R3916_REG_OVERSHOOT_CONF2_ov_pattern0,
-			ST25R3916_REG_UNDERSHOOT_CONF1_un_tx_mode0,
-			ST25R3916_REG_UNDERSHOOT_CONF2_un_pattern1 | ST25R3916_REG_UNDERSHOOT_CONF2_un_pattern0
-	);
-
-	ST25R3916_Write_Registers4_sep(pInstance, ST25R3916_REG_RX_CONF1,
-			ST25R3916_REG_RX_CONF1_lp_2000khz | ST25R3916_REG_RX_CONF1_hz_40_80khz,
-			ST25R3916_REG_RX_CONF2_sqm_dyn | ST25R3916_REG_RX_CONF2_pulz_61 | ST25R3916_REG_RX_CONF2_agc_en | ST25R3916_REG_RX_CONF2_agc_m | ST25R3916_REG_RX_CONF2_agc6_3,
-			0,
-			0
-	);
-
-	ST25R3916_Write_RegistersB2_sep(pInstance, ST25R3916_REG_B_CORR_CONF1, \
-			ST25R3916_REG_CORR_CONF1_corr_s7 | ST25R3916_REG_CORR_CONF1_corr_s4 | ST25R3916_REG_CORR_CONF1_corr_s2,
-			0
-	);
-}
-
-void ST25R3916_14A4_TxRx848(ST25R *pInstance)
-{
-	ST25R3916_Write_Registers2_sep(pInstance, ST25R3916_REG_MODE,
-			ST25R3916_REG_MODE_om_iso14443a | ST25R3916_REG_MODE_tr_am_am,
-			ST25R3916_REG_BIT_RATE_txrate_848 | ST25R3916_REG_BIT_RATE_rxrate_848
-	);
-
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TX_DRIVER, ST25R3916_REG_TX_DRIVER_am_mod_40percent | 0);
-	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_AUX_MOD, ST25R3916_REG_AUX_MOD_lm_dri | 0);
-
-	ST25R3916_Write_RegistersB4_sep(pInstance, ST25R3916_REG_B_OVERSHOOT_CONF1, \
-			0,
-			0,
-			0,
-			0
-	);
-
-	ST25R3916_Write_Registers4_sep(pInstance, ST25R3916_REG_RX_CONF1,
-			ST25R3916_REG_RX_CONF1_lp_2000khz | ST25R3916_REG_RX_CONF1_hz_40_80khz,
-			ST25R3916_REG_RX_CONF2_sqm_dyn | ST25R3916_REG_RX_CONF2_pulz_61 | ST25R3916_REG_RX_CONF2_agc_en | ST25R3916_REG_RX_CONF2_agc_m | ST25R3916_REG_RX_CONF2_agc6_3,
-			0,
-			0
-	);
-
-	ST25R3916_Write_RegistersB2_sep(pInstance, ST25R3916_REG_B_CORR_CONF1, \
-			ST25R3916_REG_CORR_CONF1_corr_s6 | ST25R3916_REG_CORR_CONF1_corr_s2,
-			0
-	);
-}
-
-//void ST25R3916_14B_ST25TB_Initiator(ST25R *pInstance)
-//{
-//	ST25R3916_Mask_IRQ(pInstance, ST25R3916_IRQ_MASK_TXE | ST25R3916_IRQ_MASK_RXS, ST25R_IRQ_MASK_OP_ADD);
-//
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_PASSIVE_TARGET, (5 << ST25R3916_REG_PASSIVE_TARGET_fdel_shift) | ST25R3916_REG_PASSIVE_TARGET_d_ac_ap2p |  ST25R3916_REG_PASSIVE_TARGET_d_212_424_1r | ST25R3916_REG_PASSIVE_TARGET_d_106_ac_a);
-//
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_MODE, ST25R3916_REG_MODE_targ_init | ST25R3916_REG_MODE_om_iso14443b | ST25R3916_REG_MODE_tr_am_am);
-//
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_RX_CONF1, ST25R3916_REG_RX_CONF1_h200 | ST25R3916_REG_RX_CONF1_lp_1200khz | ST25R3916_REG_RX_CONF1_ch_sel_AM);
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_RX_CONF2, ST25R3916_REG_RX_CONF2_agc6_3 | ST25R3916_REG_RX_CONF2_agc_m | ST25R3916_REG_RX_CONF2_agc_en | ST25R3916_REG_RX_CONF2_pulz_61 | ST25R3916_REG_RX_CONF2_sqm_dyn);
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_RX_CONF3, 0x00);
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_MASK_RX_TIMER, 0x0e);
-//	//ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_NO_RESPONSE_TIMER2, 0x23); //
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TIMER_EMV_CONTROL, /*ST25R3916_REG_TIMER_EMV_CONTROL_gptc1 | ST25R3916_REG_TIMER_EMV_CONTROL_gptc0| */ST25R3916_REG_TIMER_EMV_CONTROL_nrt_step_64fc);
-//
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_ANT_TUNE_A, 0x82);
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_ANT_TUNE_B, 0x82);
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TX_DRIVER, ST25R3916_REG_TX_DRIVER_am_mod_12percent | 0);
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_PT_MOD, (5 << ST25R3916_REG_PT_MOD_ptm_res_shift) | (15 << ST25R3916_REG_PT_MOD_pt_res_shift));
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_FIELD_THRESHOLD_ACTV, ST25R3916_REG_FIELD_THRESHOLD_ACTV_trg_105mV | ST25R3916_REG_FIELD_THRESHOLD_ACTV_rfe_105mV);
-//	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_FIELD_THRESHOLD_DEACTV, 0x00);//ST25R3916_REG_FIELD_THRESHOLD_DEACTV_trg_75mV | ST25R3916_REG_FIELD_THRESHOLD_DEACTV_rfe_75mV);
-//
-//	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_RES_AM_MOD, ST25R3916_REG_RES_AM_MOD_fa3_f);
-//	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_FIELD_ON_GT, 0x00);//0X40 0x06); // TODO bi techno
-//	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_AUX_MOD, ST25R3916_REG_AUX_MOD_lm_dri | 0);
-//	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_EMD_SUP_CONF, ST25R3916_REG_EMD_SUP_CONF_rx_start_emv_on | 4);
-//	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_CORR_CONF1, ST25R3916_REG_CORR_CONF1_corr_s0 | ST25R3916_REG_CORR_CONF1_corr_s1 | ST25R3916_REG_CORR_CONF1_corr_s3 | ST25R3916_REG_CORR_CONF1_corr_s4);
-//
-////	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_OVERSHOOT_CONF1, ST25R3916_REG_OVERSHOOT_CONF1_ov_tx_mode0);
-////	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_OVERSHOOT_CONF2, ST25R3916_REG_OVERSHOOT_CONF2_ov_pattern1 | ST25R3916_REG_OVERSHOOT_CONF2_ov_pattern0);
-////	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_UNDERSHOOT_CONF1, ST25R3916_REG_UNDERSHOOT_CONF1_un_tx_mode0);
-////	ST25R3916_Write_SingleRegisterB(pInstance, ST25R3916_REG_B_UNDERSHOOT_CONF2, ST25R3916_REG_UNDERSHOOT_CONF2_un_pattern1 | ST25R3916_REG_UNDERSHOOT_CONF2_un_pattern0);
-//}
-
+/*
 #define PRE_A	0
-#define PRE_B	MK_CMD(ST25R3916_CMD_SPACE_B_ACCESS)
-#define PRE_T	MK_CMD(ST25R3916_CMD_TEST_ACCESS)
+#define PRE_B	ST25R3916_MK_CMD(ST25R3916_CMD_SPACE_B_ACCESS)
+#define PRE_T	ST25R3916_MK_CMD(ST25R3916_CMD_TEST_ACCESS)
 
 typedef struct _ST_REGS {
 	uint8_t pre;
@@ -461,7 +310,7 @@ void ST25R_DumpRegs(ST25R * pInstance, uint8_t onlyDefaultDiff)
 	uint16_t i;
 	for (i = 0; i < sizeof(REGS) / sizeof(REGS[0]); i++)
 	{
-		val = ST25R_SPI_Read_SingleRegister_internal(pInstance, REGS[i].pre, MK_READ(REGS[i].reg));
+		val = ST25R_SPI_Read_SingleRegister_internal(pInstance, REGS[i].pre, ST25R3916_MK_READ(REGS[i].reg));
 
 		if(!onlyDefaultDiff || (val != REGS[i].def))
 		{
@@ -469,3 +318,4 @@ void ST25R_DumpRegs(ST25R * pInstance, uint8_t onlyDefaultDiff)
 		}
 	}
 }
+*/

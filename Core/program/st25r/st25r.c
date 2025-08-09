@@ -1,3 +1,8 @@
+/*  Benjamin DELPY `gentilkiwi`
+    https://blog.gentilkiwi.com
+    benjamin@gentilkiwi.com
+    Licence : https://creativecommons.org/licenses/by/4.0/
+*/
 #include "st25r.h"
 
 void ST25R_SPI_DirectCommand_internal(ST25R *pInstance, uint8_t CommandCode_Preparred)
@@ -72,7 +77,6 @@ void ST25R_SPI_Read_IRQ_internal(ST25R *pInstance, const uint8_t Register_Prepar
 	ST25R_SPI_COMM_RELEASE(pInstance);
 
 	pInstance->irqStatus = (*(uint32_t *) (buff + 1)) & ~pInstance->irqMask;
-	pInstance->irqFlag = 0;
 }
 
 void ST25R_SPI_Write_IRQ_Mask_internal(ST25R *pInstance, const uint8_t Register_Prepared, const ST25R_IRQ_CB cb)

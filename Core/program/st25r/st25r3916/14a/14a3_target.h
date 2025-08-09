@@ -6,6 +6,6 @@
 #pragma once
 #include "14a.h"
 
-void K14A3_TG_Prepare_AC_Buffer(ST25R *pInstance, const T3A_INFOS *pInfos);
-//uint8_t K14A3_TG_AC_AnswerTo(uint8_t *pbIsActivated);
-//void K14A3_TG_AC_BackToNormal();
+void ST25R3916_14A_Target(ST25R *pInstance);
+
+void ST25R3916_14A3_Target_Prepare_AC_Buffer(ST25R *pInstance, const T3A_INFOS *pInfos);

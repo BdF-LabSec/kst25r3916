@@ -4,7 +4,6 @@
     Licence : https://creativecommons.org/licenses/by/4.0/
 */
 #pragma once
-
 #include "../board.h"
 
 #define ST25R_DEFAULT_FIFO_SIZE	(512)
@@ -28,6 +27,7 @@ typedef struct _ST25R {
 #define ST25R_STATUS_CRC			0x04
 #define ST25R_STATUS_PARITY_FRAMING	0x08
 
+#define ST25T_STATUS_BUFFER_ERR		0x20
 #define ST25T_STATUS_OTHER_IRQ		0x40
 #define ST25T_STATUS_APPLICATION	0x80
 
@@ -48,6 +48,8 @@ typedef enum _ST25R_BITRATE {
 	ST25R_BITRATE_424 = 2,
 	ST25R_BITRATE_848 = 3,
 } ST25R_BITRATE, *PST25R_BITRATE;
+
+#define ST25R_BITRATE_TO_KBPS(b)	((uint16_t) 106 * (1 << (b)))
 
 #define ST25R_SPI_COMM_ACQUIRE(s)					do { \
 		while(*((s)->pSPI_Mutex)); \
@@ -77,4 +79,5 @@ void ST25R_SPI_Read_IRQ_internal(ST25R *pInstance, const uint8_t Register_Prepar
 void ST25R_SPI_Write_IRQ_Mask_internal(ST25R *pInstance, const uint8_t Register_Prepared, const ST25R_IRQ_CB cb);
 void ST25R_SPI_Write_IRQ_Mask_Operation_internal(ST25R *pInstance, const uint32_t mask, const ST25R_IRQ_MASK_OP op, const uint8_t Register_Prepared, const ST25R_IRQ_CB cb);
 
-#include "st25r3916/st25r3916.h"
+#define ST25R_REG_IC_IDENTITY_shift_ic_type	(3U)
+#define ST25R_REG_IC_IDENTITY_mask_ic_rev	(7U)

@@ -5,43 +5,17 @@
 */
 #pragma once
 #include "../st25r3916.h"
-
-#define K14A_ALL_REQ__WUPA  0x52
-#define K14A_SENS_REQ__REQA 0x26
-// SDD_REQ: SEL_CMD - SEL_PAR - data bit 1 ... data bit n
-#define K14A_SDD_REQ_CL1    0x93
-#define K14A_SDD_REQ_CL2    0x95
-#define K14A_SDD_REQ_CL3    0x97
-
-// SEL_REQ: SEL_CMD - 70h - NFCID1 CLn - BCC
-#define K14A_HLTA    		0x50
-#define K14A_HLTA_2  		0x00
-
-#define K14A_RATS    		0xe0 // 0x..
-
-#define K14A_DESELECT		0xc2
-
-#define K14A_CASCADE_TAG	0x88
-
-typedef struct _T3A_INFOS {
-    uint16_t ATQA;
-    uint8_t cbUID;
-    uint8_t UID[10];
-    uint8_t SAK;
-} T3A_INFOS, *PT3A_INFOS;
-
-typedef struct _T4A_INFOS {
-	T3A_INFOS t3a;
-	uint8_t cbATS;
-	uint8_t ATS[20];
-	ST25R_BITRATE MaxBitRate;
-	ST25R_BITRATE CurrentBitrate;
-} T4A_INFOS, *PT4A_INFOS;
-
-#define ST25R_BITRATE_TO_KBPS(b)	((uint16_t) 106 * (1 << (b)))
+#include "../../14a.h"
 
 #include "14a3_initiator.h"
 #include "14a4_initiator.h"
 #include "14a3_target.h"
 
-uint8_t K14A_Anticoll(ST25R *pInstance, T4A_INFOS *infos);
+uint8_t ST25R3916_14A_Anticoll(ST25R *pInstance, T4A_INFOS *infos);
+
+void ST25R3916_14A_Initiator(ST25R *pInstance);
+
+void ST25R3916_14A4_TxRx106(ST25R *pInstance);
+void ST25R3916_14A4_TxRx212(ST25R *pInstance);
+void ST25R3916_14A4_TxRx424(ST25R *pInstance);
+void ST25R3916_14A4_TxRx848(ST25R *pInstance);

@@ -23,7 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
-#include "../program/st25r/st25r.h"
+#include "../program/board.h"
 #include "../program/st25r/st25r3916/14a/14a.h"
 /* USER CODE END Includes */
 
@@ -147,11 +147,11 @@ int main(void)
 
 	ST25R3916_Init(&nfc0);
 	ST25R3916_14A_Initiator(&nfc0);
-	printf("NFC #0 IC identity: 0x%02hx (initiator)\r\n", nfc0.icIdentity);
+	printf("NFC #0 IC identity: %hu.%hu (0x%02hx) - initiator\r\n", nfc0.icIdentity >> ST25R_REG_IC_IDENTITY_shift_ic_type, nfc0.icIdentity & ST25R_REG_IC_IDENTITY_mask_ic_rev, nfc0.icIdentity);
 
 	ST25R3916_Init(&nfc1);
 	ST25R3916_14A_Target(&nfc1);
-	printf("NFC #1 IC identity: 0x%02hx (target)\r\n", nfc1.icIdentity);
+	printf("NFC #1 IC identity: %hu.%hu (0x%02hx) - target\r\n", nfc1.icIdentity >> ST25R_REG_IC_IDENTITY_shift_ic_type, nfc1.icIdentity & ST25R_REG_IC_IDENTITY_mask_ic_rev, nfc1.icIdentity);
 
 	ret = ST25R3916_FieldOn_AC(&nfc0);
 	if (ret == ST25R_STATUS_NO_ERROR)
@@ -159,12 +159,12 @@ int main(void)
 		do
 		{
 			LED_ON(LED_GREEN);
-			ret = K14A_Anticoll(&nfc0, &tgInfos);
+			ret = ST25R3916_14A_Anticoll(&nfc0, &tgInfos);
 			if (ret == ST25R_STATUS_NO_ERROR)
 			{
 				LED_OFF(LED_GREEN);
 
-				K14A3_TG_Prepare_AC_Buffer(&nfc1, &tgInfos.t3a);
+				ST25R3916_14A3_Target_Prepare_AC_Buffer(&nfc1, &tgInfos.t3a);
 
 				printf("ATQA: 0x%04x / %02hx %02hx\r\nSAK : 0x%02hx\r\nUID : ", tgInfos.t3a.ATQA, ((uint8_t*) &tgInfos.t3a.ATQA)[0], ((uint8_t*) &tgInfos.t3a.ATQA)[1], tgInfos.t3a.SAK);
 				kprinthex(tgInfos.t3a.UID, tgInfos.t3a.cbUID);
@@ -197,11 +197,11 @@ int main(void)
 						{
 							if(tgState == TARGET_STATE_T4)
 							{
-								K14A4_Deselect(&nfc0);
+								ST25R3916_14A4_Deselect(&nfc0);
 							}
 							else if(tgState == TARGET_STATE_T3)
 							{
-								K14A3_HLTA(&nfc0);
+								ST25R3916_14A3_HLTA(&nfc0);
 							}
 
 							if(tgInfos.CurrentBitrate != ST25R_BITRATE_106)
@@ -209,30 +209,30 @@ int main(void)
 								ST25R3916_14A4_TxRx106(&nfc0);
 								tgInfos.CurrentBitrate = ST25R_BITRATE_106;
 							}
-							K14A3_Anticoll(&nfc0, &tgInfos.t3a);
+							ST25R3916_14A3_Anticoll(&nfc0, &tgInfos.t3a);
 							tgState = TARGET_STATE_IDLE;
 						}
 
-						ST25R3916_Mask_IRQ(&nfc1, ST25R3916_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_ADD);
+						ST25R3916_Mask_IRQ(&nfc1, ST25R3916_IRQ_MASK_TXE | ST25R3916_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_ADD);
 						ST25R3916_DirectCommand(&nfc1, ST25R3916_CMD_GOTO_SENSE);
 
 						do
 						{
-							do
-							{
+							//do
+							//{
 								ST25R3916_WaitForIRQ(&nfc1);
-							} while(!nfc1.irqStatus);
+							//} while(!nfc1.irqStatus);
 
 							if(nfc1.irqStatus & (ST25R3916_IRQ_MASK_WU_A | ST25R3916_IRQ_MASK_WU_A_X))
 							{
 								TRACE_Add_Event(TRACE_EVENT_TYPE_AC, NULL, 0);
-								ST25R3916_Mask_IRQ(&nfc1, ST25R3916_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_DEL);
+								ST25R3916_Mask_IRQ(&nfc1, ST25R3916_IRQ_MASK_TXE | ST25R3916_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_DEL);
 								ST25R3916_DirectCommand(&nfc1, ST25R3916_CMD_CLEAR_FIFO);
 								tgState = TARGET_STATE_T3;
 							}
 							else if(nfc1.irqStatus & ST25R3916_IRQ_MASK_RXE)
 							{
-								ST25R3916_Receive(&nfc1, 1);
+								ret = ST25R3916_Receive_NoIRQ(&nfc1, 1);
 								if(nfc1.cbData)
 								{
 									TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_IN, nfc1.pbData, nfc1.cbData);
@@ -251,7 +251,7 @@ int main(void)
 									{
 										ST25R3916_Transmit(&nfc1, tgInfos.ATS, tgInfos.cbATS, 1);
 										TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_OUT, tgInfos.ATS, tgInfos.cbATS);
-										ret = K14A4_Rats(&nfc0, nfc1.pbData[1]);
+										ret = ST25R3916_14A4_Rats(&nfc0, nfc1.pbData[1]);
 										if(ret == ST25R_STATUS_NO_ERROR)
 										{
 //											/*
@@ -260,7 +260,7 @@ int main(void)
 //											ST25R3916_Write_GeneralPurposeTimer(&nfc0, 0x0380);
 //											ST25R3916_DirectCommand(&nfc0, ST25R3916_CMD_START_GP_TIMER);
 //											ST25R3916_WaitForIRQ(&nfc0);
-											K14A4_AdjustBitRate(&nfc0, &tgInfos, ST25R_BITRATE_848);
+											ST25R3916_14A4_AdjustBitRate(&nfc0, &tgInfos, ST25R_BITRATE_848);
 											tgState = TARGET_STATE_T4;
 										}
 									}

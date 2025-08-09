@@ -1,0 +1,285 @@
+/*  Benjamin DELPY `gentilkiwi`
+    https://blog.gentilkiwi.com
+    benjamin@gentilkiwi.com
+    Licence : https://creativecommons.org/licenses/by/4.0/
+*/
+#include "st25r3911b.h"
+
+void ST25R3911B_Init(ST25R *pInstance)
+{
+	ST25R3911B_DirectCommand(pInstance, ST25R3911B_CMD_SET_DEFAULT);
+	ST25R3911B_Write_SingleRegister(pInstance, ST25R3911B_REG_OP_CONTROL, 0);
+
+	pInstance->icIdentity = ST25R3911B_Read_SingleRegister(pInstance, ST25R3911B_REG_IC_IDENTITY);
+
+	ST25R3911B_Write_Registers2_sep(pInstance, ST25R3911B_REG_IO_CONF1,
+			ST25R3911B_REG_IO_CONF1_osc | ST25R3911B_REG_IO_CONF1_mask_out_cl | ST25R3911B_REG_IO_CONF1_lf_clk_off,
+			ST25R3911B_REG_IO_CONF2_miso_pd2 | ST25R3911B_REG_IO_CONF2_miso_pd1
+	);
+
+	ST25R3911B_Write_SingleRegister(pInstance, ST25R3911B_REG_OP_CONTROL, ST25R3911B_REG_OP_CONTROL_en);
+	ST25R3911B_WaitForIRQ(pInstance);
+	ST25R3911B_Mask_IRQ(pInstance, ST25R3911B_IRQ_MASK_OSC, ST25R_IRQ_MASK_OP_ADD);
+
+
+	ST25R3911B_Write_SingleRegister(pInstance, ST25R3911B_REG_REGULATOR_CONTROL, ST25R3911B_REG_REGULATOR_CONTROL_reg_s);
+	ST25R3911B_Write_SingleRegister(pInstance, ST25R3911B_REG_REGULATOR_CONTROL, 0x00);
+	ST25R3911B_DirectCommand(pInstance, ST25R3911B_CMD_ADJUST_REGULATORS);
+	ST25R3911B_WaitForIRQ(pInstance);
+	ST25R3911B_Mask_IRQ(pInstance, ST25R3911B_IRQ_MASK_DCT, ST25R_IRQ_MASK_OP_ADD);
+}
+
+void ST25R3911B_WaitForIRQ(ST25R *pInstance)
+{
+	while(!pInstance->irqFlag);
+	pInstance->irqFlag = 0;
+	ST25R3911B_Read_IRQ(pInstance);
+}
+
+uint8_t ST25R3911B_Generic_IRQ_toErr(uint32_t irq)
+{
+	uint8_t status = ST25R_STATUS_NO_ERROR;
+	if(irq & ST25R3911B_IRQ_MASK_CAC)
+	{
+		status |= ST25R_STATUS_COLLISION;
+	}
+
+	if(irq & ST25R3911B_IRQ_MASK_NRE)
+	{
+		status |= ST25R_STATUS_NO_RESPONSE;
+	}
+
+	if(irq & ST25R3911B_IRQ_MASK_CRC)
+	{
+		status |= ST25R_STATUS_CRC;
+	}
+
+	if(irq & (ST25R3911B_IRQ_MASK_PAR | ST25R3911B_IRQ_MASK_ERR2 | ST25R3911B_IRQ_MASK_ERR1))
+	{
+		status |= ST25R_STATUS_PARITY_FRAMING;
+	}
+
+	return status;
+}
+
+uint8_t ST25R3911B_WaitFor_SpecificIRQ(ST25R *pInstance, uint32_t SpecificIRQ)
+{
+	uint8_t ret;
+	ST25R3911B_WaitForIRQ(pInstance);
+	ret = ST25R3911B_Generic_IRQ_toErr(pInstance->irqStatus);
+	if((ret == ST25R_STATUS_NO_ERROR) && !(pInstance->irqStatus & SpecificIRQ))
+	{
+		ret = ST25T_STATUS_OTHER_IRQ;
+	}
+
+	return ret;
+}
+
+uint8_t ST25R3911B_FieldOn_AC(ST25R *pInstance)
+{
+	uint8_t ret;
+
+	ST25R3911B_DirectCommand(pInstance, ST25R3911B_CMD_INITIAL_RF_COLLISION);
+	ret = ST25R3911B_WaitFor_SpecificIRQ(pInstance, ST25R3911B_IRQ_MASK_CAT);
+	if(ret == ST25R_STATUS_NO_ERROR)
+	{
+		ST25R3911B_Write_SingleRegister(pInstance, ST25R3911B_REG_OP_CONTROL, ST25R3911B_REG_OP_CONTROL_en | ST25R3911B_REG_OP_CONTROL_rx_man | ST25R3911B_REG_OP_CONTROL_rx_en | ST25R3911B_REG_OP_CONTROL_tx_en);
+	}
+
+	return ret;
+}
+
+void ST25R3911B_FieldOff(ST25R *pInstance)
+{
+	ST25R3911B_Write_SingleRegister(pInstance, ST25R3911B_REG_OP_CONTROL, ST25R3911B_REG_OP_CONTROL_en | ST25R3911B_REG_OP_CONTROL_rx_man);
+}
+
+uint8_t ST25R3911B_Fifo_Status(ST25R * pInstance, uint8_t *pStatus2)
+{
+	uint8_t buff[3] = {ST25R3911B_MK_READ(ST25R3911B_REG_FIFO_RX_STATUS1), };
+
+	ST25R_SPI_COMM_ACQUIRE(pInstance);
+	ST25R_SPI_COMM_TRANSMIT_RECEIVE(pInstance, buff, sizeof(buff));
+	ST25R_SPI_COMM_RELEASE(pInstance);
+
+	if(pStatus2)
+	{
+		*pStatus2 = buff[2] & 0x7f;
+	}
+
+	return buff[1] & 0x7f;
+}
+
+uint8_t ST25R3911B_Transmit_NoIRQ(ST25R *pInstance, const uint8_t *pbData, const uint16_t cbData, const uint8_t bWithCRC)
+{
+	uint8_t buff[] = {ST25R3911B_MK_CMD(ST25R3911B_CMD_CLEAR_FIFO), ST25R3911B_MK_WRITE(ST25R3911B_REG_NUM_TX_BYTES1), cbData >> (8 - 3), cbData << 3}, ret = ST25R_STATUS_NO_ERROR;
+	ST25R_SPI_COMM_ACQUIRE(pInstance);
+	ST25R_SPI_COMM_TRANSMIT(pInstance, buff, sizeof(buff));
+	ST25R_SPI_COMM_RELEASE(pInstance);
+	ST25R3911B_Fifo_Load(pInstance, pbData, cbData);
+
+	ST25R_SPI_DirectCommand_internal(pInstance, bWithCRC ? ST25R3911B_MK_CMD(ST25R3911B_CMD_TRANSMIT_WITH_CRC) : ST25R3911B_MK_CMD(ST25R3911B_CMD_TRANSMIT_WITHOUT_CRC));
+
+	return ret;
+}
+
+uint8_t ST25R3911B_Transmit(ST25R *pInstance, const uint8_t *pbData, const uint16_t cbData, const uint8_t bWithCRC)
+{
+	uint8_t ret;
+
+	ret = ST25R3911B_Transmit_NoIRQ(pInstance, pbData, cbData, bWithCRC);
+	if(ret == ST25R_STATUS_NO_ERROR)
+	{
+		ret = ST25R3911B_WaitFor_SpecificIRQ(pInstance, ST25R3911B_IRQ_MASK_TXE);
+	}
+
+	return ret;
+}
+
+uint8_t ST25R3911B_Receive_NoIRQ(ST25R *pInstance, const uint8_t bWithCRC)
+{
+	uint8_t ret;
+
+	pInstance->cbData = ST25R3911B_Fifo_Status(pInstance, NULL);
+	if(pInstance->cbData && (pInstance->cbData <= sizeof(pInstance->pbData)))
+	{
+		ST25R3911B_Fifo_Read(pInstance, pInstance->pbData, pInstance->cbData);
+		if(bWithCRC)
+		{
+			pInstance->cbData -= 2;
+		}
+
+		ret = ST25R_STATUS_NO_ERROR;
+	}
+	else
+	{
+		ret = ST25T_STATUS_BUFFER_ERR;
+	}
+
+	return ret;
+}
+
+uint8_t ST25R3911B_Receive(ST25R *pInstance, const uint8_t bWithCRC)
+{
+	uint8_t ret;
+
+	pInstance->cbData = 0;
+	ret = ST25R3911B_WaitFor_SpecificIRQ(pInstance, ST25R3911B_IRQ_MASK_RXE);
+	if(ret == ST25R_STATUS_NO_ERROR)
+	{
+		ret = ST25R3911B_Receive_NoIRQ(pInstance, bWithCRC);
+	}
+
+	return ret;
+}
+
+uint8_t ST25R3911B_Transmit_then_Receive(ST25R *pInstance, const uint8_t *pbData, const uint16_t cbData, const uint8_t bWithCRC)
+{
+	uint8_t ret;
+
+	pInstance->cbData = 0;
+	if(pbData && cbData)
+	{
+		ret = ST25R3911B_Transmit(pInstance, pbData, cbData, bWithCRC);
+	}
+	else // Specific for WUPA/REQA
+	{
+		ret = ST25R3911B_WaitFor_SpecificIRQ(pInstance, ST25R3911B_IRQ_MASK_TXE);
+	}
+
+	if(ret == ST25R_STATUS_NO_ERROR)
+	{
+		ret = ST25R3911B_Receive(pInstance, bWithCRC);
+	}
+
+	return ret;
+}
+
+
+//#include <stdio.h>
+//
+//typedef struct _ST_REGS {
+//	uint8_t reg;
+//	char *name;
+//	uint8_t def;
+//} ST_REGS, *PST_REGS;
+//
+//const ST_REGS REGS[] = {
+//	{ST25R3911B_REG_IO_CONF1, "IO_CONF1", 0x08},
+//	{ST25R3911B_REG_IO_CONF2, "IO_CONF2", 0x00},
+//	{ST25R3911B_REG_OP_CONTROL, "OP_CONTROL", 0x00},
+//	{ST25R3911B_REG_MODE, "MODE", 0x08},
+//	{ST25R3911B_REG_BIT_RATE, "BIT_RATE", 0x00},
+//	{ST25R3911B_REG_ISO14443A_NFC, "ISO14443A_NFC", 0x00},
+//	{ST25R3911B_REG_ISO14443B_1, "ISO14443B_1", 0x00},
+//	{ST25R3911B_REG_ISO14443B_2, "ISO14443B_2", 0x00},
+//	{ST25R3911B_REG_STREAM_MODE, "STREAM_MODE", 0x00},
+//	{ST25R3911B_REG_AUX, "AUX", 0x04},
+//	{ST25R3911B_REG_RX_CONF1, "RX_CONF1", 0x00},
+//	{ST25R3911B_REG_RX_CONF2, "RX_CONF2", 0x1a},
+//	{ST25R3911B_REG_RX_CONF3, "RX_CONF3", 0xd8},
+//	{ST25R3911B_REG_RX_CONF4, "RX_CONF4", 0x00},
+//	{ST25R3911B_REG_MASK_RX_TIMER, "MASK_RX_TIMER", 0x08},
+//	{ST25R3911B_REG_NO_RESPONSE_TIMER1, "NO_RESPONSE_TIMER1", 0x00},
+//	{ST25R3911B_REG_NO_RESPONSE_TIMER2, "NO_RESPONSE_TIMER2", 0x00},
+//	{ST25R3911B_REG_GPT_CONTROL, "GPT_CONTROL", 0x00},
+//	{ST25R3911B_REG_GPT1, "GPT1", 0x00},
+//	{ST25R3911B_REG_GPT2, "GPT2", 0x00},
+//	{ST25R3911B_REG_IRQ_MASK_MAIN, "IRQ_MASK_MAIN", 0x00},
+//	{ST25R3911B_REG_IRQ_MASK_TIMER_NFC, "IRQ_MASK_TIMER_NFC", 0x00},
+//	{ST25R3911B_REG_IRQ_MASK_ERROR_WUP, "IRQ_MASK_ERROR_WUP", 0x00},
+//	//{ST25R3911B_REG_IRQ_MAIN, "IRQ_MAIN", 0x00},
+//	//{ST25R3911B_REG_IRQ_TIMER_NFC, "IRQ_TIMER_NFC", 0x00},
+//	//{ST25R3911B_REG_IRQ_ERROR_WUP, "IRQ_ERROR_WUP", 0x00},
+//	//{ST25R3911B_REG_FIFO_RX_STATUS1, "FIFO_RX_STATUS1", 0x00},
+//	//{ST25R3911B_REG_FIFO_RX_STATUS2, "FIFO_RX_STATUS2", 0x00},
+//	//{ST25R3911B_REG_COLLISION_STATUS, "COLLISION_STATUS", 0x00},
+//	{ST25R3911B_REG_NUM_TX_BYTES1, "NUM_TX_BYTES1", 0x00},
+//	{ST25R3911B_REG_NUM_TX_BYTES2, "NUM_TX_BYTES2", 0x00},
+//	{ST25R3911B_REG_NFCIP1_BIT_RATE, "NFCIP1_BIT_RATE", 0x00},
+//	//{ST25R3911B_REG_AD_RESULT, "AD_RESULT", 0x00},
+//	{ST25R3911B_REG_ANT_CAL_CONTROL, "ANT_CAL_CONTROL", 0x00},
+//	{ST25R3911B_REG_ANT_CAL_TARGET, "ANT_CAL_TARGET", 0x80},
+//	//{ST25R3911B_REG_ANT_CAL_RESULT, "ANT_CAL_RESULT", 0x00},
+//	{ST25R3911B_REG_AM_MOD_DEPTH_CONTROL, "AM_MOD_DEPTH_CONTROL", 0x00},
+//	//{ST25R3911B_REG_AM_MOD_DEPTH_RESULT, "AM_MOD_DEPTH_RESULT", 0x00},
+//	{ST25R3911B_REG_RFO_AM_ON_LEVEL, "RFO_AM_ON_LEVEL", 0x00},
+//	{ST25R3911B_REG_RFO_AM_OFF_LEVEL, "RFO_AM_OFF_LEVEL", 0x00},
+//	{ST25R3911B_REG_FIELD_THRESHOLD, "FIELD_THRESHOLD", 0x33},
+//	{ST25R3911B_REG_REGULATOR_CONTROL, "REGULATOR_CONTROL", 0x00},
+//	//{ST25R3911B_REG_REGULATOR_RESULT, "REGULATOR_RESULT", 0x00},
+//	//{ST25R3911B_REG_RSSI_RESULT, "RSSI_RESULT", 0x00},
+//	{ST25R3911B_REG_GAIN_RED_STATE, "GAIN_RED_STATE", 0x00},
+//	{ST25R3911B_REG_CAP_SENSOR_CONTROL, "CAP_SENSOR_CONTROL", 0x00},
+//	//{ST25R3911B_REG_CAP_SENSOR_RESULT, "CAP_SENSOR_RESULT", 0x00},
+//	{ST25R3911B_REG_AUX_DISPLAY, "AUX_DISPLAY", 0x00},
+//	{ST25R3911B_REG_WUP_TIMER_CONTROL, "WUP_TIMER_CONTROL", 0x00},
+//	{ST25R3911B_REG_AMPLITUDE_MEASURE_CONF, "AMPLITUDE_MEASURE_CONF", 0x00},
+//	{ST25R3911B_REG_AMPLITUDE_MEASURE_REF, "AMPLITUDE_MEASURE_REF", 0x00},
+//	//{ST25R3911B_REG_AMPLITUDE_MEASURE_AA_RESULT, "AMPLITUDE_MEASURE_AA_RESULT", 0x00},
+//	//{ST25R3911B_REG_AMPLITUDE_MEASURE_RESULT, "AMPLITUDE_MEASURE_RESULT", 0x00},
+//	{ST25R3911B_REG_PHASE_MEASURE_CONF, "PHASE_MEASURE_CONF", 0x00},
+//	{ST25R3911B_REG_PHASE_MEASURE_REF, "PHASE_MEASURE_REF", 0x00},
+//	//{ST25R3911B_REG_PHASE_MEASURE_AA_RESULT, "PHASE_MEASURE_AA_RESULT", 0x00},
+//	//{ST25R3911B_REG_PHASE_MEASURE_RESULT, "PHASE_MEASURE_RESULT", 0x00},
+//	{ST25R3911B_REG_CAPACITANCE_MEASURE_CONF, "CAPACITANCE_MEASURE_CONF", 0x00},
+//	{ST25R3911B_REG_CAPACITANCE_MEASURE_REF, "CAPACITANCE_MEASURE_REF", 0x00},
+//	//{ST25R3911B_REG_CAPACITANCE_MEASURE_AA_RESULT, "CAPACITANCE_MEASURE_AA_RESULT", 0x00},
+//	//{ST25R3911B_REG_CAPACITANCE_MEASURE_RESULT, "CAPACITANCE_MEASURE_RESULT", 0x00},
+//	{ST25R3911B_REG_IC_IDENTITY, "IC_IDENTITY", 0x0d},
+//};
+//
+//void ST25R3911B_DumpRegs(ST25R * pInstance, uint8_t onlyDefaultDiff)
+//{
+//	uint8_t val;
+//	uint16_t i;
+//	for (i = 0; i < sizeof(REGS) / sizeof(REGS[0]); i++)
+//	{
+//		val = ST25R3911B_Read_SingleRegister(pInstance, REGS[i].reg);
+//
+//		if(!onlyDefaultDiff || (val != REGS[i].def))
+//		{
+//			printf("[%c] 0x%02hx - %s: 0x%02hx\r\n", 'A', REGS[i].reg,  REGS[i].name, val);
+//		}
+//	}
+//}
