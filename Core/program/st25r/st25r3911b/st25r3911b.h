@@ -31,6 +31,21 @@
 			((v4) << 24)   \
 	)
 
+/*
+ * No B space register on 3911B
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ */
+
 #define ST25R3911B_Read_SingleRegisterTEST(s, reg)				ST25R_SPI_Read_SingleRegister_internal((s), ST25R3911B_MK_CMD(ST25R3911B_CMD_TEST_ACCESS), ST25R3911B_MK_READ(reg))
 #define ST25R3911B_Write_SingleRegisterTEST(s, reg, value)		ST25R_SPI_Write_SingleRegister_internal((s), ST25R3911B_MK_CMD(ST25R3911B_CMD_TEST_ACCESS), ST25R3911B_MK_WRITE(reg), value)
 
@@ -42,6 +57,8 @@
 
 #define ST25R3911B_Write_NoResponseTimer(s, v)					ST25R3911B_Write_Registers2((s), ST25R3911B_MK_WRITE(ST25R3911B_REG_NO_RESPONSE_TIMER1), __builtin_bswap16(v))
 #define ST25R3911B_Write_GeneralPurposeTimer(s, v)				ST25R3911B_Write_Registers2((s), ST25R3911B_MK_WRITE(ST25R3911B_REG_GPT1), __builtin_bswap16(v))
+
+// No Passive Target
 
 
 void ST25R3911B_Init(ST25R *pInstance);

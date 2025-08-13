@@ -2,10 +2,15 @@
 #include <stdio.h>
 #include <string.h>
 
-uint8_t RAM_TRACE[TRACE_SIZE] = {0};
-uint32_t RAM_TRACE_CB = 0;
+uint8_t RAM_TRACE[TRACE_SIZE] = {0x00, 0x00, 0x00, 0x00};
+__attribute__((section(".trace"))) /*const */uint8_t FLASH_TRACE[TRACE_SIZE] = {0x00, 0x00, 0x00, 0x00};
 
-__attribute__((section(".trace"))) /*const */uint8_t FLASH_TRACE[TRACE_SIZE] = {TRACE_EVENT_INVALID};
+typedef struct _TRACE_DATA {
+	uint32_t timestamp;
+	void *source;
+	uint32_t irq;
+	uint32_t optionalCbData;
+} TRACE_DATA, *PTRACE_DATA;
 
 HAL_StatusTypeDef TRACE_FLASH_Erase()
 {
@@ -35,42 +40,26 @@ HAL_StatusTypeDef TRACE_FLASH_Erase()
 	return status;
 }
 
-void TRACE_Add_Event(TRACE_EVENT_TYPE type, const uint8_t *pbData, const uint16_t cbData)
+void TRACE_RAM_Add(const void *source, const uint32_t irq, const uint8_t *pbData, const uint16_t cbData) // TODO: deal with size :')
 {
-	if((type == TRACE_EVENT_TYPE_DATA_IN) || (type == TRACE_EVENT_TYPE_DATA_OUT))
+	uint32_t *pRAM_TRACE_CB = (uint32_t *) RAM_TRACE;
+	PTRACE_DATA pData = (PTRACE_DATA) (RAM_TRACE + sizeof(uint32_t) + *pRAM_TRACE_CB);
+
+	pData->timestamp = HAL_GetTick();
+	pData->source = (void *) source;
+	pData->irq = irq;
+	if(pbData && cbData)
 	{
-		if((RAM_TRACE_CB + sizeof(uint32_t) + 1 + 1 + cbData + 1) <= sizeof(RAM_TRACE)) // + 1 field for Invalid when saving
-		{
-			*(uint32_t *) (RAM_TRACE + RAM_TRACE_CB) = HAL_GetTick();
-			RAM_TRACE_CB += sizeof(uint32_t);
-			RAM_TRACE[RAM_TRACE_CB++] = type;
-			RAM_TRACE[RAM_TRACE_CB++] = (uint8_t) cbData;
-			memcpy(RAM_TRACE + RAM_TRACE_CB, pbData, cbData);
-			RAM_TRACE_CB += cbData;
-		}
-	}
-	else if(type == TRACE_EVENT_TYPE_RAW_IRQ)
-	{
-		if((RAM_TRACE_CB + sizeof(uint32_t) + 1 + sizeof(uint32_t) + 1) <= sizeof(RAM_TRACE)) // + 1 field for Invalid when saving
-		{
-			*(uint32_t *) (RAM_TRACE + RAM_TRACE_CB) = HAL_GetTick();
-			RAM_TRACE_CB += sizeof(uint32_t);
-			RAM_TRACE[RAM_TRACE_CB++] = type;
-			*(uint32_t *) (RAM_TRACE + RAM_TRACE_CB) = *(uint32_t *) pbData;
-			RAM_TRACE_CB += sizeof(uint32_t);
-		}
+		pData->optionalCbData = cbData;
+		memcpy(pData + 1, pbData, cbData);
 	}
 	else
 	{
-		if((RAM_TRACE_CB + sizeof(uint32_t) + 1 + 1) <= sizeof(RAM_TRACE)) // + 1 field for Invalid when saving
-		{
-			*(uint32_t *) (RAM_TRACE + RAM_TRACE_CB) = HAL_GetTick();
-			RAM_TRACE_CB += sizeof(uint32_t);
-			RAM_TRACE[RAM_TRACE_CB++] = type;
-		}
+		pData->optionalCbData = 0;
 	}
+
+	*pRAM_TRACE_CB +=  __align_up(sizeof(TRACE_DATA) + pData->optionalCbData, __alignof__(TRACE_DATA));
 }
-extern void kprinthex(const void *lpData, const uint16_t cbData);
 
 const char * IRQ_DESC[] = {
 	"RFU", "RX_REST", "COL", "TXE", "RXE", "RXS", "FWL", "OSC",
@@ -78,7 +67,7 @@ const char * IRQ_DESC[] = {
 	"WCAP", "WPH", "WAM", "WT", "ERR1", "ERR2", "PAR", "CRC",
 	"WU_A", "WU_A_X", "RFU2", "WU_F", "RXE_PTA", "APON", "SL_WL", "PPON2",
 };
-void TRACE_Flash_IRQ_Desc(uint32_t irq)
+void TRACE_FLASH_IRQ_Describe(uint32_t irq)
 {
 	uint8_t i;
 	for(i = 0; i < (sizeof(uint32_t) * 8); i++)
@@ -90,49 +79,25 @@ void TRACE_Flash_IRQ_Desc(uint32_t irq)
 	}
 }
 
-void TRACE_Flash_Describe()
+void TRACE_FLASH_Describe()
 {
-	uint32_t i;
+	uint32_t i, FLASH_TRACE_CB = *(uint32_t *) FLASH_TRACE;
+	const TRACE_DATA *pData;
 
-	for(i = 0; (i < sizeof(FLASH_TRACE)) && (FLASH_TRACE[i] != TRACE_EVENT_INVALID); )
+	printf("FLASH_TRACE @ %p (%lu)\r\n", FLASH_TRACE, FLASH_TRACE_CB);
+
+	for(i = 0; i < FLASH_TRACE_CB; i += __align_up(sizeof(TRACE_DATA) + pData->optionalCbData, __alignof__(TRACE_DATA)))
 	{
-		printf("%lu\t", *(uint32_t *) (FLASH_TRACE + i));
-		i += sizeof(uint32_t);
-
-		switch(FLASH_TRACE[i])
+		pData = (PTRACE_DATA) (FLASH_TRACE + sizeof(uint32_t) + i);
+		printf("%6lu 0x%08lx ", pData->timestamp, pData->irq); // pData->source
+		TRACE_FLASH_IRQ_Describe(pData->irq);
+		if(pData->optionalCbData)
 		{
-		case TRACE_EVENT_TYPE_AC:
-			printf("| AC / SELECT\r\n");
-			i++;
-			break;
-		case TRACE_EVENT_TYPE_DATA_IN:
-			printf("< ");
-			kprinthex(FLASH_TRACE + i + 2, FLASH_TRACE[i + 1]);
-			i += 1 + 1 + FLASH_TRACE[i + 1];
-			break;
-		case TRACE_EVENT_TYPE_DATA_OUT:
-			printf("> ");
-			kprinthex(FLASH_TRACE + i + 2, FLASH_TRACE[i + 1]);
-			i += 1 + 1 + FLASH_TRACE[i + 1];
-			break;
-		case TRACE_EVENT_TYPE_FIELD_ON:
-			printf("| FIELD ON\r\n");
-			i++;
-			break;
-		case TRACE_EVENT_TYPE_FIELD_OFF:
-			printf("| FIELD OFF\r\n");
-			i++;
-			break;
-		case TRACE_EVENT_TYPE_RAW_IRQ:
-			printf("| IRQ 0x%08lx -- ", *(uint32_t *)(FLASH_TRACE + i + 1));
-			TRACE_Flash_IRQ_Desc(*(uint32_t *)(FLASH_TRACE + i + 1));
+			kprinthex(pData + 1, pData->optionalCbData);
+		}
+		else
+		{
 			printf("\r\n");
-			i += 1 + sizeof(uint32_t);
-			break;
-		default:
-			printf("????\r\n");
-			LED_ON(LED_RED);
-			while(1);
 		}
 	}
 }
@@ -141,6 +106,7 @@ HAL_StatusTypeDef TRACE_FLASH_Save()
 {
 	HAL_StatusTypeDef status;
 	uint32_t i;
+	uint32_t *pRAM_TRACE_CB = (uint32_t *) RAM_TRACE;
 
 	status = TRACE_FLASH_Erase(0);
 	if(status == HAL_OK)
@@ -149,26 +115,17 @@ HAL_StatusTypeDef TRACE_FLASH_Save()
 		if(status == HAL_OK)
 		{
 			LED_ON(LED_YELLOW);
-			if(RAM_TRACE_CB && (RAM_TRACE_CB < sizeof(RAM_TRACE)))
+			if(*pRAM_TRACE_CB)
 			{
-				RAM_TRACE[RAM_TRACE_CB++] = TRACE_EVENT_INVALID;
-
-				for(i = 0; (status == HAL_OK) && (i < (TRACE_SIZE / 16)); i += 16)
+				for(i = 0; (status == HAL_OK) && (i < TRACE_SIZE); i += 16)
 				{
 					status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_FLASHWORD, (uint32_t) (FLASH_TRACE + i), (uint32_t) (RAM_TRACE + i));
 				}
-
-				printf("RAM_TRACE to FLASH_TRACE (for %lu real bytes): %u\r\n", RAM_TRACE_CB, status);
-
-				RAM_TRACE[0] = TRACE_EVENT_INVALID;
-				RAM_TRACE_CB = 0;
+				printf("RAM_TRACE to FLASH_TRACE: %u (%lu bytes)\r\n", status, *(uint32_t *) FLASH_TRACE);
 			}
 			else
 			{
-				RAM_TRACE[0] = TRACE_EVENT_INVALID;
-				RAM_TRACE_CB = 0;
 				status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_FLASHWORD, (uint32_t) FLASH_TRACE, (uint32_t) RAM_TRACE);
-
 				printf("RAM_TRACE & FLASH_TRACE cleared: %u\r\n", status);
 			}
 
@@ -183,4 +140,14 @@ HAL_StatusTypeDef TRACE_FLASH_Save()
 	}
 
 	return status;
+}
+
+void kprinthex(const void *lpData, const uint16_t cbData)
+{
+	uint16_t i;
+	for(i = 0; i < cbData; i++)
+	{
+		printf("%02hx ", ((const uint8_t *)lpData)[i]);
+	}
+	printf("\r\n");
 }

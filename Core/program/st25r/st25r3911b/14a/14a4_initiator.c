@@ -4,24 +4,38 @@
     Licence : https://creativecommons.org/licenses/by/4.0/
 */
 #include "14a4_initiator.h"
+#include <string.h>
 
-uint8_t ST25R3911B_14A4_Rats(ST25R *pInstance, const uint8_t parameters)
+uint8_t ST25R3911B_14A4_Rats(ST25R *pInstance, const uint8_t parameters, T4A_INFOS *pt4aInfos)
 {
-	uint8_t ret, buffer[2] = {K14A_RATS, parameters};//>5 << 4};// 64 instead of 256 - 0x80};
-    ret = ST25R3911B_Transmit_then_Receive(pInstance, buffer, sizeof(buffer), 1);
-    if(ret == ST25R_STATUS_NO_ERROR)
-    {
-    	ST25R3911B_Write_NoResponseTimer(pInstance, 0x4000); // TODO: from RATS, here FWT 77.33 ms
-    }
+	uint8_t ret, buffer[2] = {K14A_RATS, parameters};
 
-    return ret;
+	ret = ST25R3911B_Transmit_then_Receive(pInstance, buffer, sizeof(buffer), 1);
+	if(ret == ST25R_STATUS_NO_ERROR)
+	{
+		if (pInstance->cbData <= sizeof(pt4aInfos->ATS))
+		{
+			pt4aInfos->cbATS = (uint8_t) pInstance->cbData;
+			memcpy(pt4aInfos->ATS, pInstance->pbData, pInstance->cbData);
+			ST25R14A4_AdjustFromATS(pt4aInfos);
+			ST25R3911B_Write_SingleRegister(pInstance, ST25R3911B_REG_GPT_CONTROL, /*0**/ST25R3911B_REG_GPT_CONTROL_nrt_step);
+			ST25R3911B_Write_NoResponseTimer(pInstance, 1 << pt4aInfos->FWI);
+
+			HAL_Delay(1 + ((1 << pt4aInfos->SFGI) / 3)); // TODO better
+		}
+		else
+		{
+			ret = ST25T_STATUS_APPLICATION;
+		}
+	}
+
+	return ret;
 }
 
 uint8_t ST25R3911B_14A4_Deselect(ST25R *pInstance)
 {
 	uint8_t ret, buffer = K14A_DESELECT;
 
-	ST25R3911B_Write_NoResponseTimer(pInstance, 0x0170); // TODO
 	ret = ST25R3911B_Transmit_then_Receive(pInstance, &buffer, sizeof(buffer), 1);
 	if(ret == ST25R_STATUS_NO_ERROR)
 	{
@@ -31,7 +45,7 @@ uint8_t ST25R3911B_14A4_Deselect(ST25R *pInstance)
 		}
 		else
 		{
-			HAL_Delay(0);
+			HAL_Delay(1); // TODO better
 		}
 	}
 

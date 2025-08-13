@@ -23,6 +23,10 @@
 
 #define K14A_CASCADE_TAG	0x88
 
+#define K14A_DEFAULT_FSCI	2 // to FSD
+#define K14A_DEFAULT_FWI	4 // to FWT
+#define K14A_DEFAULT_SFGI	0 // to SFGT, 0 indicate no SFGT needed
+
 typedef struct _T3A_INFOS {
     uint16_t ATQA;
     uint8_t cbUID;
@@ -34,10 +38,21 @@ typedef struct _T4A_INFOS {
 	T3A_INFOS t3a;
 	uint8_t cbATS;
 	uint8_t ATS[20];
+
+	uint8_t FSCI;
+	uint16_t MaxFrameSize;
+
+	uint8_t FWI; // need nrt_step = 1 to be able to use as is
+	uint8_t SFGI;
+
 	ST25R_BITRATE MaxBitRate;
+
+
+
 	ST25R_BITRATE CurrentBitrate;
 } T4A_INFOS, *PT4A_INFOS;
 
 extern const uint8_t ST25R_14A3_HLTA_data[2];
+extern const uint8_t ST25R_14A4_DESELECT_data[1];
 
-void ST25R_14A4_AdjustMaxBitRate(T4A_INFOS *pt4aInfos);
+void ST25R14A4_AdjustFromATS(T4A_INFOS *pt4aInfos);

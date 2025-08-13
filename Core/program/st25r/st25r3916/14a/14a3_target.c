@@ -10,7 +10,7 @@ void ST25R3916_14A_Target(ST25R *pInstance)
 {
 	ST25R3916_Mask_IRQ(pInstance, /*ST25R3916_IRQ_MASK_TXE | */ST25R3916_IRQ_MASK_RXS, ST25R_IRQ_MASK_OP_ADD);
 	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_MASK_RX_TIMER, 0x02);
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TIMER_EMV_CONTROL, /*ST25R3916_REG_TIMER_EMV_CONTROL_gptc1 | ST25R3916_REG_TIMER_EMV_CONTROL_gptc0| */ST25R3916_REG_TIMER_EMV_CONTROL_nrt_step_64fc);
+	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TIMER_EMV_CONTROL, ST25R3916_REG_TIMER_EMV_CONTROL_nrt_step_64fc);
 	ST25R3916_Write_Registers2_sep(pInstance, ST25R3916_REG_ANT_TUNE_A,
 			0x00,
 			0xff
@@ -30,31 +30,31 @@ void ST25R3916_14A3_Target_Prepare_AC_Buffer(ST25R *pInstance, const T3A_INFOS *
 {
 	uint8_t PT_A[15] = {0}, AUX_Flag;
 
-	memcpy(PT_A, pInfos->UID, pInfos->cbUID);
+	memcpy(PT_A, pInfos->UID, MIN(pInfos->cbUID, 10));
 	*(uint16_t * ) (PT_A + 10) = pInfos->ATQA;
 	PT_A[12] = pInfos->SAK;
 
-    if(pInfos->cbUID > 4)
-    {
-    	PT_A[12] |= 0x04;
-        PT_A[13] = pInfos->SAK;
-        if(pInfos->cbUID > 7) // invalid on ST25R3916 !
-        {
-        	PT_A[13] |= 0x04;
-        	PT_A[14] = pInfos->SAK;
+	if(pInfos->cbUID > 4)
+	{
+		PT_A[12] |= 0x04;
+		PT_A[13] = pInfos->SAK;
+		if(pInfos->cbUID > 7) // invalid on ST25R3916 !
+		{
+			PT_A[13] |= 0x04;
+			PT_A[14] = pInfos->SAK;
 
-           	AUX_Flag = ST25R3916_REG_AUX_nfc_id1;
-        }
-        else
-        {
-        	AUX_Flag = ST25R3916_REG_AUX_nfc_id_7bytes;
-        }
-    }
-    else
-    {
-    	AUX_Flag = ST25R3916_REG_AUX_nfc_id_4bytes;
-    }
+			AUX_Flag = ST25R3916_REG_AUX_nfc_id1;
+		}
+		else
+		{
+			AUX_Flag = ST25R3916_REG_AUX_nfc_id_7bytes;
+		}
+	}
+	else
+	{
+		AUX_Flag = ST25R3916_REG_AUX_nfc_id_4bytes;
+	}
 
-    ST25R3916_PT_A_Config_Load(pInstance, PT_A, sizeof(PT_A));
-    ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_AUX, AUX_Flag);
+	ST25R3916_PT_A_Config_Load(pInstance, PT_A, sizeof(PT_A));
+	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_AUX, AUX_Flag);
 }

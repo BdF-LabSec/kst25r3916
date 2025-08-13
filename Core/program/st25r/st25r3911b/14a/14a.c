@@ -4,7 +4,6 @@
     Licence : https://creativecommons.org/licenses/by/4.0/
 */
 #include "14a.h"
-#include <string.h>
 
 uint8_t ST25R3911B_14A_Anticoll(ST25R *pInstance, T4A_INFOS *infos)
 {
@@ -16,20 +15,7 @@ uint8_t ST25R3911B_14A_Anticoll(ST25R *pInstance, T4A_INFOS *infos)
 		if (infos->t3a.SAK & 0x20)
 		{
 			infos->CurrentBitrate = ST25R_BITRATE_106;
-			ret = ST25R3911B_14A4_Rats(pInstance, 0x50); // 64 b, CID 0
-			if (ret == ST25R_STATUS_NO_ERROR)
-			{
-				if (pInstance->cbData <= sizeof(infos->ATS))
-				{
-					infos->cbATS = (uint8_t) pInstance->cbData;
-					memcpy(infos->ATS, pInstance->pbData, pInstance->cbData);
-					ST25R_14A4_AdjustMaxBitRate(infos);
-				}
-				else
-				{
-					ret = ST25T_STATUS_APPLICATION;
-				}
-			}
+			ret = ST25R3911B_14A4_Rats(pInstance, 0x50, infos); // 64 b, CID 0
 		}
 	}
 
@@ -39,9 +25,6 @@ uint8_t ST25R3911B_14A_Anticoll(ST25R *pInstance, T4A_INFOS *infos)
 void ST25R3911B_14A_Initiator(ST25R *pInstance)
 {
 	ST25R3911B_Mask_IRQ(pInstance, /*ST25R3911B_IRQ_MASK_TXE | */ST25R3911B_IRQ_MASK_RXS, ST25R_IRQ_MASK_OP_ADD);
-
-	ST25R3911B_Write_SingleRegister(pInstance, ST25R3911B_REG_MODE, ST25R3911B_REG_MODE_targ_init | ST25R3911B_REG_MODE_om_iso14443a);
-
 	ST25R3911B_Write_SingleRegister(pInstance, ST25R3911B_REG_MASK_RX_TIMER, 0x0e);
 
 	ST25R3911B_Write_Registers2_sep(pInstance, ST25R3911B_REG_ANT_CAL_CONTROL,
@@ -57,6 +40,7 @@ void ST25R3911B_14A_Initiator(ST25R *pInstance)
 			(2 << ST25R3911B_REG_RX_CONF4_shift_rg2_am) | (1 << ST25R3911B_REG_RX_CONF4_shift_rg2_pm)
 	);
 
+	ST25R3911B_Write_SingleRegister(pInstance, ST25R3911B_REG_MODE, ST25R3911B_REG_MODE_targ_init | ST25R3911B_REG_MODE_om_iso14443a);
 	ST25R3911B_14A_TxRx106(pInstance);
 }
 

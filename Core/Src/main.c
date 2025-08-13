@@ -24,7 +24,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "../program/board.h"
-#include "../program/st25r/st25r3916/14a/14a.h"
+#include "../program/st25r/st25r3916/14a/14a4_initiator.h"
+#include "../program/st25r/st25r3916/14a/14a3_target.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -110,6 +111,11 @@ int main(void)
 	uint8_t ret;
 	T4A_INFOS tgInfos;
 	TARGET_STATE tgState;
+
+	uint8_t cbATS;
+	uint8_t ATS[20];
+	uint8_t FSD_Max = 8;
+	uint8_t RATS_Param;
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
@@ -140,10 +146,9 @@ int main(void)
 	//printf("Device ID   : 0x%04x rev: 0x%04x\r\n", (uint16_t )HAL_GetDEVID(), (uint16_t ) HAL_GetREVID());
 	printf("Flash size  : %hu Kbytes\r\n", *(const uint16_t*)FLASHSIZE_BASE);
 	printf("Device UID  : 0x%08lx%08lx%08lx\r\n", HAL_GetUIDw0(), HAL_GetUIDw1(), HAL_GetUIDw2());
-	printf("SysClockFreq: %lu MHz\r\n\r\n", HAL_RCC_GetSysClockFreq() / 1000 / 1000);
-
-	printf("Flash trace : %p\r\n\r\n", FLASH_TRACE);
-	TRACE_Flash_Describe();
+	printf("SysClockFreq: %lu MHz\r\n", HAL_RCC_GetSysClockFreq() / 1000 / 1000);
+	TRACE_FLASH_Describe();
+	printf("\r\n");
 
 	ST25R3916_Init(&nfc0);
 	ST25R3916_14A_Initiator(&nfc0);
@@ -173,17 +178,26 @@ int main(void)
 					printf("ATS : ");
 					kprinthex(tgInfos.ATS, tgInfos.cbATS);
 
-					tgInfos.ATS[1] = (tgInfos.ATS[1] & 0xf0) | 0b0101;
-					tgInfos.ATS[2] = 0x80;
-					printf("ATS*: ");
-					kprinthex(tgInfos.ATS, tgInfos.cbATS);
+					printf("| MaxFrameSize         : %u - FSCI: %hu\r\n", tgInfos.MaxFrameSize, tgInfos.FSCI);
+					printf("| FrameWaitingTime     : %u (4096/fc) - FWI: %hu\r\n", 1 << tgInfos.FWI, tgInfos.FWI);
+					printf("| StartupFrameGuardTime: %u (4096/fc) - SFGI: %hu\r\n", 1 << tgInfos.SFGI, tgInfos.SFGI);
+					printf("| Max bitrate          : %u kbps\r\n", ST25R_BITRATE_TO_KBPS(tgInfos.MaxBitRate));
 
-					printf("| Max bitrate: %u kbps - will answer %u kbps\r\n", ST25R_BITRATE_TO_KBPS(tgInfos.MaxBitRate), ST25R_BITRATE_TO_KBPS(ST25R_BITRATE_106));
+					memcpy(ATS, tgInfos.ATS, tgInfos.cbATS);
+					cbATS = tgInfos.cbATS;
+
+					ATS[1] = (ATS[1] & 0xf0) | MIN(tgInfos.FSCI, FSD_Max);
+					ATS[2] = 0x80;
+					ATS[3] += 0b00010001;
+					printf("ATS*: ");
+					kprinthex(ATS, cbATS);
+
 					tgState = TARGET_STATE_T4;
 				}
 				else
 				{
 					tgState = TARGET_STATE_T3;
+					cbATS = 0;
 				}
 
 				if (ret == ST25R_STATUS_NO_ERROR)
@@ -193,6 +207,9 @@ int main(void)
 					ST25R3916_Mask_IRQ(&nfc1, ~(ST25R3916_IRQ_MASK_COL | ST25R3916_IRQ_MASK_EON | ST25R3916_IRQ_MASK_EOF | ST25R3916_IRQ_MASK_CRC | ST25R3916_IRQ_MASK_PAR | ST25R3916_IRQ_MASK_ERR2 | ST25R3916_IRQ_MASK_ERR1 | ST25R3916_IRQ_MASK_WU_A | ST25R3916_IRQ_MASK_WU_A_X), ST25R_IRQ_MASK_OP_ADD);
 
 					do{
+						ST25R3916_Mask_IRQ(&nfc1, ST25R3916_IRQ_MASK_TXE | ST25R3916_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_ADD);
+						ST25R3916_DirectCommand(&nfc1, ST25R3916_CMD_GOTO_SENSE);
+
 						if(tgState != TARGET_STATE_IDLE)
 						{
 							if(tgState == TARGET_STATE_T4)
@@ -213,19 +230,13 @@ int main(void)
 							tgState = TARGET_STATE_IDLE;
 						}
 
-						ST25R3916_Mask_IRQ(&nfc1, ST25R3916_IRQ_MASK_TXE | ST25R3916_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_ADD);
-						ST25R3916_DirectCommand(&nfc1, ST25R3916_CMD_GOTO_SENSE);
-
 						do
 						{
-							//do
-							//{
-								ST25R3916_WaitForIRQ(&nfc1);
-							//} while(!nfc1.irqStatus);
+							ST25R3916_WaitForIRQ(&nfc1);
+							TRACE_RAM_Add(&nfc1, nfc1.irqStatus, NULL, 0);
 
 							if(nfc1.irqStatus & (ST25R3916_IRQ_MASK_WU_A | ST25R3916_IRQ_MASK_WU_A_X))
 							{
-								TRACE_Add_Event(TRACE_EVENT_TYPE_AC, NULL, 0);
 								ST25R3916_Mask_IRQ(&nfc1, ST25R3916_IRQ_MASK_TXE | ST25R3916_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_DEL);
 								ST25R3916_DirectCommand(&nfc1, ST25R3916_CMD_CLEAR_FIFO);
 								tgState = TARGET_STATE_T3;
@@ -233,67 +244,63 @@ int main(void)
 							else if(nfc1.irqStatus & ST25R3916_IRQ_MASK_RXE)
 							{
 								ret = ST25R3916_Receive_NoIRQ(&nfc1, 1);
-								if(nfc1.cbData)
+								if(ret == ST25R_STATUS_NO_ERROR)
 								{
-									TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_IN, nfc1.pbData, nfc1.cbData);
+									TRACE_RAM_Add(&nfc1, nfc1.irqStatus, nfc1.pbData, nfc1.cbData);
 									if ((nfc1.cbData == 2) && (nfc1.pbData[0] == K14A_HLTA) && (nfc1.pbData[1] == K14A_HLTA_2))
 									{
-										break;
+										ret = ST25T_STATUS_APPLICATION;
 									}
 									else if ((nfc1.cbData == 1) && (nfc1.pbData[0] == K14A_DESELECT))
 									{
-										const uint8_t myDeselect = K14A_DESELECT;
-										ST25R3916_Transmit(&nfc1, &myDeselect, sizeof(myDeselect), 1);
-										TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_OUT, &myDeselect, sizeof(myDeselect));
-										break;
+										ST25R3916_Transmit(&nfc1, ST25R_14A4_DESELECT_data, sizeof(ST25R_14A4_DESELECT_data), 1);
+										TRACE_RAM_Add(&nfc1, nfc1.irqStatus, ST25R_14A4_DESELECT_data, sizeof(ST25R_14A4_DESELECT_data));
+										ret = ST25T_STATUS_APPLICATION;
 									}
 									else if ((nfc1.cbData == 2) && (nfc1.pbData[0] == K14A_RATS))
 									{
-										ST25R3916_Transmit(&nfc1, tgInfos.ATS, tgInfos.cbATS, 1);
-										TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_OUT, tgInfos.ATS, tgInfos.cbATS);
-										ret = ST25R3916_14A4_Rats(&nfc0, nfc1.pbData[1]);
+										ret = ST25R3916_Transmit(&nfc1, ATS, cbATS, 1);
+										TRACE_RAM_Add(&nfc1, nfc1.irqStatus, ATS, cbATS);
 										if(ret == ST25R_STATUS_NO_ERROR)
 										{
-//											/*
-//											 * Because EV2 XL, don't ask PPS too soon...
-//											 */
-//											ST25R3916_Write_GeneralPurposeTimer(&nfc0, 0x0380);
-//											ST25R3916_DirectCommand(&nfc0, ST25R3916_CMD_START_GP_TIMER);
-//											ST25R3916_WaitForIRQ(&nfc0);
-											ST25R3916_14A4_AdjustBitRate(&nfc0, &tgInfos, ST25R_BITRATE_848);
-											tgState = TARGET_STATE_T4;
+											RATS_Param = (MIN(nfc1.pbData[1] >> 4, FSD_Max) << 4) | (nfc1.pbData[1] & 0b00001111);
+											ret = ST25R3916_14A4_Rats(&nfc0, RATS_Param/*nfc1.pbData[1]*/, &tgInfos);
+											if(ret == ST25R_STATUS_NO_ERROR)
+											{
+												ret = ST25R3916_14A4_AdjustBitRate(&nfc0, &tgInfos, ST25R_BITRATE_848);
+												if(ret == ST25R_STATUS_NO_ERROR)
+												{
+													tgState = TARGET_STATE_T4;
+												}
+											}
 										}
 									}
-									else
+									else if(nfc1.cbData)
 									{
 										ret = ST25R3916_Transmit_then_Receive(&nfc0, nfc1.pbData, nfc1.cbData, 1);
 										if(ret == ST25R_STATUS_NO_ERROR)
 										{
-											ST25R3916_Transmit(&nfc1, nfc0.pbData, nfc0.cbData, 1);
-											TRACE_Add_Event(TRACE_EVENT_TYPE_DATA_OUT, nfc0.pbData, nfc0.cbData);
-										}
-										else
-										{
-											break;
+											ret = ST25R3916_Transmit(&nfc1, nfc0.pbData, nfc0.cbData, 1);
+											TRACE_RAM_Add(&nfc1, nfc1.irqStatus, nfc0.pbData, nfc0.cbData);
 										}
 									}
+									else
+									{
+										ret = ST25T_STATUS_BUFFER_ERR;
+									}
+								}
+
+								if(ret != ST25R_STATUS_NO_ERROR)
+								{
+									break;
 								}
 							}
-							else if(nfc1.irqStatus & ST25R3916_IRQ_MASK_EOF)
+							else if(nfc1.irqStatus == ST25R3916_IRQ_MASK_EON) // TODO better
 							{
-								TRACE_Add_Event(TRACE_EVENT_TYPE_FIELD_OFF, NULL, 0);
-								break;
-							}
-							else if(nfc1.irqStatus & ST25R3916_IRQ_MASK_EON)
-							{
-								TRACE_Add_Event(TRACE_EVENT_TYPE_FIELD_ON, NULL, 0);
+								;
 							}
 							else
 							{
-//								LED_ON(LED_RED);
-//								printf("Target AC error with IRQ: 0x%08lx -- DEBUG IT !\r\n", nfc1.irqStatus);
-//								while(1);
-								TRACE_Add_Event(TRACE_EVENT_TYPE_RAW_IRQ, (uint8_t *) &nfc1.irqStatus, sizeof(nfc1.irqStatus));
 								break;
 							}
 
@@ -305,9 +312,9 @@ int main(void)
 			else
 			{
 				printf("Error: 0x%02hx\r\n", ret);
-				HAL_Delay(100);
+				HAL_Delay(500);
 				LED_OFF(LED_GREEN);
-				HAL_Delay(100);
+				HAL_Delay(500);
 			}
 		}
 		while(1);
@@ -622,16 +629,6 @@ int __io_putchar(int ch)
 {
 	HAL_UART_Transmit(&huart3, (uint8_t *) &ch, 1, HAL_MAX_DELAY);
 	return ch;
-}
-
-void kprinthex(const void *lpData, const uint16_t cbData)
-{
-	uint16_t i;
-	for(i = 0; i < cbData; i++)
-	{
-		printf("%02hx ", ((const uint8_t *)lpData)[i]);
-	}
-	printf("\r\n");
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)

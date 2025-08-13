@@ -4,7 +4,6 @@
     Licence : https://creativecommons.org/licenses/by/4.0/
 */
 #include "14a.h"
-#include <string.h>
 
 uint8_t ST25R3916_14A_Anticoll(ST25R *pInstance, T4A_INFOS *infos)
 {
@@ -16,20 +15,7 @@ uint8_t ST25R3916_14A_Anticoll(ST25R *pInstance, T4A_INFOS *infos)
 		if (infos->t3a.SAK & 0x20)
 		{
 			infos->CurrentBitrate = ST25R_BITRATE_106;
-			ret = ST25R3916_14A4_Rats(pInstance, 0x50); // 64 b, CID 0
-			if (ret == ST25R_STATUS_NO_ERROR)
-			{
-				if (pInstance->cbData <= sizeof(infos->ATS))
-				{
-					infos->cbATS = (uint8_t) pInstance->cbData;
-					memcpy(infos->ATS, pInstance->pbData, pInstance->cbData);
-					ST25R_14A4_AdjustMaxBitRate(infos);
-				}
-				else
-				{
-					ret = ST25T_STATUS_APPLICATION;
-				}
-			}
+			ret = ST25R3916_14A4_Rats(pInstance, 0x50, infos); // 64 b, CID 0
 		}
 	}
 
@@ -40,8 +26,7 @@ void ST25R3916_14A_Initiator(ST25R *pInstance)
 {
 	ST25R3916_Mask_IRQ(pInstance, /*ST25R3916_IRQ_MASK_TXE | */ST25R3916_IRQ_MASK_RXS, ST25R_IRQ_MASK_OP_ADD);
 	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_MASK_RX_TIMER, 0x0e);
-	//ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_NO_RESPONSE_TIMER2, 0x23); //
-	ST25R3916_Write_SingleRegister(pInstance, ST25R3916_REG_TIMER_EMV_CONTROL, /*ST25R3916_REG_TIMER_EMV_CONTROL_gptc1 | ST25R3916_REG_TIMER_EMV_CONTROL_gptc0| */ST25R3916_REG_TIMER_EMV_CONTROL_nrt_step_64fc);
+
 	ST25R3916_Write_Registers2_sep(pInstance, ST25R3916_REG_ANT_TUNE_A,
 			0x82,
 			0x82
@@ -89,7 +74,7 @@ void ST25R3916_14A4_TxRx106(ST25R *pInstance)
 void ST25R3916_14A4_TxRx212(ST25R *pInstance)
 {
 	ST25R3916_Write_Registers2_sep(pInstance, ST25R3916_REG_MODE,
-			ST25R3916_REG_MODE_om_iso14443a | ST25R3916_REG_MODE_tr_am_am,
+			ST25R3916_REG_MODE_om_iso14443a | ST25R3916_REG_MODE_tr_am_am, //TODO check!
 			ST25R3916_REG_BIT_RATE_txrate_212 | ST25R3916_REG_BIT_RATE_rxrate_212
 	);
 

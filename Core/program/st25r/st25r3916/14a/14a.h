@@ -9,7 +9,6 @@
 
 #include "14a3_initiator.h"
 #include "14a4_initiator.h"
-#include "14a3_target.h"
 
 uint8_t ST25R3916_14A_Anticoll(ST25R *pInstance, T4A_INFOS *infos);
 
