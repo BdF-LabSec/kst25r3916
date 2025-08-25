@@ -9,70 +9,117 @@
 /* ST25R500, seems to support:
  * - ST25R300
  * - ST25R501
+ *
  * See: https://blog.gentilkiwi.com/Smartcards/NFC/st25r/Chips
  */
+
+#define ST25R500_DirectCommand(s, cmd)								ST25R_SPI_DirectCommand_internal((s), ST25R500_MK_CMD(cmd))
+#define ST25R500_Read_SingleRegister(s, reg)						ST25R_SPI_Read_SingleRegister_internal((s), 0, ST25R500_MK_READ(reg))
+#define ST25R500_Write_SingleRegister(s, reg, value)				ST25R_SPI_Write_SingleRegister_internal((s), 0, ST25R500_MK_WRITE(reg), (value))
+
+#define ST25R500_Write_Registers2(s, reg, value)					ST25R_SPI_Write_Registers2_internal((s), 0, ST25R500_MK_WRITE(reg), (value))
+#define ST25R500_Write_Registers2_sep(s, reg, v1, v2)				ST25R500_Write_Registers2(s, reg, \
+			((v1) <<  0) | \
+			((v2) <<  8) \
+	)
+#define ST25R500_Write_Registers4(s, reg, value)					ST25R_SPI_Write_Registers4_internal((s), 0, ST25R500_MK_WRITE(reg), (value))
+#define ST25R500_Write_Registers4_sep(s, reg, v1, v2, v3, v4)		ST25R500_Write_Registers4(s, reg, \
+			((v1) <<  0) | \
+			((v2) <<  8) | \
+			((v3) << 16) | \
+			((v4) << 24) \
+	)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#define ST25R500_Read_SingleRegisterTEST(s, reg)					ST25R_SPI_Read_SingleRegister_internal((s), ST25R500_MK_CMD(ST25R500_CMD_TEST_ACCESS), ST25R500_MK_READ(reg))
+#define ST25R500_Write_SingleRegisterTEST(s, reg, value)			ST25R_SPI_Write_SingleRegister_internal((s), ST25R500_MK_CMD(ST25R500_CMD_TEST_ACCESS), ST25R500_MK_WRITE(reg), value)
+
+#define ST25R500_Fifo_Read(s, d, c)									ST25R_SPI_Read_Multiple_internal((s), ST25R500_MK_READ(ST25R500_REG_FIFO), (d), (c))
+#define ST25R500_Fifo_Load(s, d, c)									ST25R_SPI_Write_Multiple_internal((s), ST25R500_MK_WRITE(ST25R500_REG_FIFO), (d), (c))
+
+#define ST25R500_Read_IRQ(s)										ST25R_SPI_Read_IRQ_internal((s), ST25R500_MK_READ(ST25R500_REG_IRQ1), ST25R_IRQ_CB_3)
+#define ST25R500_Mask_IRQ(s, mask, op)								ST25R_SPI_Write_IRQ_Mask_Operation_internal((s), (mask), (op), ST25R500_MK_WRITE(ST25R500_REG_IRQ_MASK1), ST25R_IRQ_CB_3)
+
+#define ST25R500_Write_NoResponseTimer(s, v)						ST25R500_Write_Registers2((s), ST25R500_MK_WRITE(ST25R500_REG_NRT1), __builtin_bswap16(v))
+#define ST25R500_Write_GeneralPurposeTimer(s, v)					ST25R500_Write_Registers2((s), ST25R500_MK_WRITE(ST25R500_REG_GPT1), __builtin_bswap16(v))
+
+#define ST25R500_PT_A_Config_Load(s, d, c)							ST25R_SPI_Write_Multiple_internal((s), ST25R500_MK_WRITE(ST25R500_REG_CEM_A), (d), (c))
+
+
+void ST25R500_Init(ST25R *pInstance);
+void ST25R500_WaitForIRQ(ST25R *pInstance);
+uint8_t ST25R500_Generic_IRQ_toErr(uint32_t irq, ST25R *pInstance);
+uint8_t ST25R500_WaitFor_SpecificIRQ(ST25R *pInstance, uint32_t SpecificIRQ);
+
+uint8_t ST25R500_FieldOn_AC(ST25R *pInstance);
+void ST25R500_FieldOff(ST25R *pInstance);
+
+uint16_t ST25R500_Fifo_Status(ST25R * pInstance, uint8_t *pStatus2);
+
+uint8_t ST25R500_Transmit_NoIRQ(ST25R *pInstance, const uint8_t *pbData, const uint16_t cbData, const uint8_t bWithCRC/* not used*/);
+uint8_t ST25R500_Transmit(ST25R *pInstance, const uint8_t *pbData, const uint16_t cbData, const uint8_t bWithCRC/* not used*/);
+uint8_t ST25R500_Receive_NoIRQ(ST25R *pInstance, const uint8_t bWithCRC);
+uint8_t ST25R500_Receive(ST25R *pInstance, const uint8_t bWithCRC);
+uint8_t ST25R500_Transmit_then_Receive(ST25R *pInstance, const uint8_t *pbData, const uint16_t cbData, const uint8_t bWithCRC);
+
+
+void displayRegisters(ST25R *pInstance, uint8_t bOnlyDiffFromDefault);
 
 
 /* DS14655 # 5.15.2.1 - Serial peripheral interface (SPI) - Table 5 */
 
-#define ST25R500_MASK_ADDRRESS		0b01111111
+#define ST25R500_MASK_ADDRESS		0b01111111
 #define ST25R500_MASK_COMMAND		0b10011111
 
+#define ST25R500_WRITE_MODE			(0b0 << 7)
+#define ST25R500_READ_MODE			(0b1 << 7)
+#define ST25R500_CMD_MODE			(0b11 << 5)
+
+#define ST25R500_MK_WRITE(reg)		(((reg) & ST25R500_MASK_ADDRESS) | ST25R500_WRITE_MODE)
+#define ST25R500_MK_READ(reg)		(((reg) & ST25R500_MASK_ADDRESS) | ST25R500_READ_MODE)
+#define ST25R500_MK_CMD(cmd)		(((cmd) & ST25R500_MASK_COMMAND) | ST25R500_CMD_MODE)
 
 /* ST25R500 direct commands */
-#define ST25R500_CMD_SET_DEFAULT              0x60U    /*!< Puts the chip in default state (same as after power-up) */
-#define ST25R500_CMD_STOP                     0x62U    /*!< Stops all activities and clears FIFO                    */
-#define ST25R500_CMD_CLEAR_FIFO               0x64U    /*!< Clears FIFO, Collision and IRQ status                   */
-#define ST25R500_CMD_CLEAR_RXGAIN             0x66U    /*!< Clears FIFO, Collision and IRQ status                   */
-#define ST25R500_CMD_ADJUST_REGULATORS        0x68U    /*!< Adjust regulators                                       */
-#define ST25R500_CMD_TRANSMIT                 0x6AU    /*!< Transmit                                                */
-#define ST25R500_CMD_TRANSMIT_EOF             0x6CU    /*!< Transmit ISO15693 EOF                                   */
-#define ST25R500_CMD_NFC_FIELD_ON             0x6EU    /*!< Field On                                                */
-#define ST25R500_CMD_MASK_RECEIVE_DATA        0x70U    /*!< Mask receive data                                       */
-#define ST25R500_CMD_UNMASK_RECEIVE_DATA      0x72U    /*!< Unmask receive data                                     */
-#define ST25R500_CMD_CALIBRATE_WU             0x74U    /*!< Calibrate Wake-up Measurement                           */
-#define ST25R500_CMD_CLEAR_WU_CALIB           0x76U    /*!< Clear Wake-up Calibratation                             */
-#define ST25R500_CMD_MEASURE_WU               0x78U    /*!< Measure Wake-up I and Q components                      */
-#define ST25R500_CMD_MEASURE_IQ               0x7AU    /*!< Measure I and Q components                              */
-#define ST25R500_CMD_SENSE_RF                 0x7CU    /*!< Sense RF on RFI pins                                    */
-#define ST25R500_CMD_TRIGGER_WU_EV            0x7EU    /*!< Trigger Wake-up Event                             */
-#define ST25R500_CMD_START_GP_TIMER           0xE2U    /*!< Start the general purpose timer                         */
-#define ST25R500_CMD_START_WUT                0xE4U    /*!< Start the wake-up timer                                 */
-#define ST25R500_CMD_START_MRT                0xE6U    /*!< Start the mask-receive timer                            */
-#define ST25R500_CMD_START_NRT                0xE8U    /*!< Start the no-response timer                             */
-#define ST25R500_CMD_STOP_NRT                 0xEAU    /*!< Stop No Response Timer                                  */
-#define ST25R500_CMD_CALIBRATE_RC             0xEEU    /*!< Calibrate RC                                            */
-#define ST25R500_CMD_TRIGGER_DIAG             0xF8U    /*!< Trigger Diagnostic Measurement                          */
-#define ST25R500_CMD_TEST_ACCESS              0xFCU    /*!< Enable R/W access to the test registers                 */
+#define ST25R500_CMD_SET_DEFAULT              0x00U    /*!< Puts the chip in default state (same as after power-up) */
+#define ST25R500_CMD_STOP                     0x02U    /*!< Stops all activities and clears FIFO                    */
+#define ST25R500_CMD_CLEAR_FIFO               0x04U    /*!< Clears FIFO, Collision and IRQ status                   */
+#define ST25R500_CMD_CLEAR_RXGAIN             0x06U    /*!< Clears FIFO, Collision and IRQ status                   */
+#define ST25R500_CMD_ADJUST_REGULATORS        0x08U    /*!< Adjust regulators                                       */
+#define ST25R500_CMD_TRANSMIT                 0x0AU    /*!< Transmit                                                */
+#define ST25R500_CMD_TRANSMIT_EOF             0x0CU    /*!< Transmit ISO15693 EOF                                   */
+#define ST25R500_CMD_NFC_FIELD_ON             0x0EU    /*!< Field On                                                */
+#define ST25R500_CMD_MASK_RECEIVE_DATA        0x10U    /*!< Mask receive data                                       */
+#define ST25R500_CMD_UNMASK_RECEIVE_DATA      0x12U    /*!< Unmask receive data                                     */
+#define ST25R500_CMD_CALIBRATE_WU             0x14U    /*!< Calibrate Wake-up Measurement                           */
+#define ST25R500_CMD_CLEAR_WU_CALIB           0x16U    /*!< Clear Wake-up Calibratation                             */
+#define ST25R500_CMD_MEASURE_WU               0x18U    /*!< Measure Wake-up I and Q components                      */
+#define ST25R500_CMD_MEASURE_IQ               0x1AU    /*!< Measure I and Q components                              */
+#define ST25R500_CMD_SENSE_RF                 0x1CU    /*!< Sense RF on RFI pins                                    */
+#define ST25R500_CMD_TRIGGER_WU_EV            0x1EU    /*!< Trigger Wake-up Event                             */
+#define ST25R500_CMD_START_GP_TIMER           0x82U    /*!< Start the general purpose timer                         */
+#define ST25R500_CMD_START_WUT                0x84U    /*!< Start the wake-up timer                                 */
+#define ST25R500_CMD_START_MRT                0x86U    /*!< Start the mask-receive timer                            */
+#define ST25R500_CMD_START_NRT                0x88U    /*!< Start the no-response timer                             */
+#define ST25R500_CMD_STOP_NRT                 0x8AU    /*!< Stop No Response Timer                                  */
+#define ST25R500_CMD_CALIBRATE_RC             0x8EU    /*!< Calibrate RC                                            */
 
-#define ST25R500_BR_DO_NOT_SET                0xFFU    /*!< Indicates not to change this Bit Rate                   */
-#define ST25R500_BR_106_26                    0x00U    /*!< ST25R500 Bit Rate  106 kbps (fc/128) / 26 kbps(fc/512)  */
-#define ST25R500_BR_212_53                    0x01U    /*!< ST25R500 Bit Rate  212 kbps (fc/64)                     */
-#define ST25R500_BR_424                       0x02U    /*!< ST25R500 Bit Rate  424 kbps (fc/32) / 53 kbps(fc/256)   */
-#define ST25R500_BR_848                       0x03U    /*!< ST25R500 Bit Rate  848 kbps (fc/16)                     */
-
-#define ST25R500_REG_DROP_200                 0U       /*!< ST25R500 target drop for regulator adjustment: 200mV    */
-#define ST25R500_REG_DROP_250                 1U       /*!< ST25R500 target drop for regulator adjustment: 250mV    */
-#define ST25R500_REG_DROP_300                 2U       /*!< ST25R500 target drop for regulator adjustment: 300mV    */
-#define ST25R500_REG_DROP_350                 3U       /*!< ST25R500 target drop for regulator adjustment: 350mV    */
-#define ST25R500_REG_DROP_400                 4U       /*!< ST25R500 target drop for regulator adjustment: 400mV    */
-#define ST25R500_REG_DROP_450                 5U       /*!< ST25R500 target drop for regulator adjustment: 450mV    */
-#define ST25R500_REG_DROP_500                 6U       /*!< ST25R500 target drop for regulator adjustment: 500mV    */
-#define ST25R500_REG_DROP_550                 7U       /*!< ST25R500 target drop for regulator adjustment: 550mV    */
-#define ST25R500_REG_DROP_DO_NOT_SET          0xFFU    /*!< Indicates not to change this setting (regd)             */
-
-#define ST25R500_THRESHOLD_DO_NOT_SET         0xFFU    /*!< Indicates not to change this Threshold                  */
-
-#define ST25R500_REG_LEN                      1U       /*!< Number of bytes in a ST25R500 register                  */
-#define ST25R500_CMD_LEN                      1U       /*!< ST25R500 CMD length                                     */
-#define ST25R500_FIFO_DEPTH                   256U     /*!< Depth of FIFO                                           */
-#define ST25R500_TOUT_OSC_STABLE              5U       /*!< Timeout for Oscillator to get stable                    */
-
-#define ST25R500_WRITE_MODE                   (0U << 7)           /*!< ST25R500 Operation Mode: Write               */
-#define ST25R500_READ_MODE                    (1U << 7)           /*!< ST25R500 Operation Mode: Read                */
-#define ST25R500_CMD_MODE                     ST25R500_WRITE_MODE /*!< ST25R500 Operation Mode: Direct Command      */
-#define ST25R500_FIFO_ACCESS                  (0x5FU)             /*!< ST25R500 FIFO Access                         */
-
+#define ST25R500_CMD_TRIGGER_DIAG             0x98U    /*!< Trigger Diagnostic Measurement                          */
+#define ST25R500_CMD_TEST_ACCESS              0x9CU    /*!< Enable R/W access to the test registers                 */
 
 #define ST25R500_DIAG_MEAS_CMD                0x01U               /*!< ST25R500 Diagnostic Measurement cmd size     */
 #define ST25R500_DIAG_MEAS_CMD_LEN            0x02U               /*!< ST25R500 Diagnostic Measurement cmd length   */
@@ -87,17 +134,6 @@
 #define ST25R500_DIAG_MEAS_VDD_VDD            0x11U               /*!< ST25R500 Diagnostic Measurement: VDD         */
 #define ST25R500_DIAG_MEAS_VDD_AGD            0x12U               /*!< ST25R500 Diagnostic Measurement: AGD         */
 
-
-#define ST25R500_FIFO_STATUS_LEN                               2        /*!< Number of FIFO Status Register                                    */
-#define ST25R500_OBS_MODE_LEN                                  2        /*!< Number of Observation Mode Config Registers                       */
-
-#define ST25R500_CEM_A_LEN                                     31U      /*!< Passive target memory A config length                             */
-#define ST25R500_CEM_B_LEN                                     0U       /*!< Passive target memory B config length                             */
-#define ST25R500_CEM_F_LEN                                     21U      /*!< Passive target memory F config length                             */
-
-
-/*! Full CE memory length */
-#define ST25R500_CEM_LEN                                       (ST25R500_CEM_A_LEN + ST25R500_CEM_B_LEN + ST25R500_CEM_F_LEN)
 
 #define ST25R500_REG_OPERATION                                 0x00U    /*!< RW Operation Register                                             */
 #define ST25R500_REG_GENERAL                                   0x01U    /*!< RW General Register                                               */
@@ -163,7 +199,6 @@
 #define ST25R500_REG_IRQ2                                      0x3DU    /*!< RO IRQ Register 2                                                 */
 #define ST25R500_REG_IRQ3                                      0x3EU    /*!< RO IRQ Register 3                                                 */
 #define ST25R500_REG_IC_ID                                     0x3FU    /*!< RO IC Identity Register                                           */
-
 #define ST25R500_REG_STATUS1                                   0x40U    /*!< RO Status Register 1                                              */
 #define ST25R500_REG_STATUS2                                   0x41U    /*!< RO Status Register 2                                              */
 #define ST25R500_REG_STATUS_STATIC1                            0x42U    /*!< RO Status Static Register 1                                       */
@@ -188,6 +223,7 @@
 #define ST25R500_REG_EFD_THRESHOLD                             0x57U    /*!< RW EFD Thresholds Register                                        */
 
 #define ST25R500_REG_CEM_A                                     0x58U    /*!< RW CE Memory A                                                    */
+// ??? #define ST25R500_REG_CEM_B                                     0x59U    /*!< RW CE Memory B                                                    */
 #define ST25R500_REG_CEM_F                                     0x5AU    /*!< RW CE Memory F Register                                           */
 #define ST25R500_REG_FIFO                                      0x5FU    /*!< RW FIFO address                                                   */
 
@@ -480,9 +516,9 @@
 #define ST25R500_REG_PROTOCOL_rx_rate1                        (1U<<7)
 #define ST25R500_REG_PROTOCOL_rx_rate0                        (1U<<6)
 #define ST25R500_REG_PROTOCOL_rx_rate_106_26                  (0x0U<<6)
-#define ST25R500_REG_PROTOCOL_rx_rate_212_53                  (0x2U<<6)
-#define ST25R500_REG_PROTOCOL_rx_rate_424                     (0x3U<<6)
-#define ST25R500_REG_PROTOCOL_rx_rate_848                     (0x4U<<6)
+#define ST25R500_REG_PROTOCOL_rx_rate_212_53                  (0x1U<<6) // TODO: https://ols.st.com/s/case/500Ty00000WrcMZIAZ/
+#define ST25R500_REG_PROTOCOL_rx_rate_424                     (0x2U<<6) // TODO: https://ols.st.com/s/case/500Ty00000WrcMZIAZ/
+#define ST25R500_REG_PROTOCOL_rx_rate_848                     (0x3U<<6) // TODO: https://ols.st.com/s/case/500Ty00000WrcMZIAZ/
 #define ST25R500_REG_PROTOCOL_rx_rate_mask                    (0x03U<<6)
 #define ST25R500_REG_PROTOCOL_rx_rate_shift                   (6U)
 #define ST25R500_REG_PROTOCOL_tx_rate1                        (1U<<5)
@@ -674,7 +710,8 @@
 #define ST25R500_REG_NRT_GPT_CONF_gptc_no_trigger             (0U<<4)
 #define ST25R500_REG_NRT_GPT_CONF_gptc_erx                    (1U<<4)
 #define ST25R500_REG_NRT_GPT_CONF_gptc_srx                    (2U<<4)
-#define ST25R500_REG_NRT_GPT_CONF_gptc_etx                    (3U<<5)
+#define ST25R500_REG_NRT_GPT_CONF_gptc_etx                    (3U<<4) // (3U<<5) TODO: https://ols.st.com/s/case/500Ty00000WrcMZIAZ/
+#define ST25R500_REG_NRT_GPT_CONF_gptc_fon                    (4U<<4) // TODO: https://ols.st.com/s/case/500Ty00000WrcMZIAZ/
 #define ST25R500_REG_NRT_GPT_CONF_gptc_mask                   (7U<<4)
 #define ST25R500_REG_NRT_GPT_CONF_gptc_shift                  (4U)
 #define ST25R500_REG_NRT_GPT_CONF_rfu1                        (1U<<3)

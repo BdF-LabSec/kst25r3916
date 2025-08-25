@@ -253,6 +253,7 @@ uint8_t ST25R3916B_Transmit_then_Receive(ST25R *pInstance, const uint8_t *pbData
 #define ST25R3916B_REG_T_ANALOG_TEST_AND_OBSERVATION_1			0x01U
 #define ST25R3916B_REG_T_unk_INCLUDING_OVERHEAT_PROTECTION		0x04U
 
+
 #define ST25R3916B_REG_IO_CONF1_single                         (1U<<7)
 #define ST25R3916B_REG_IO_CONF1_rfo2                           (1U<<6)
 #define ST25R3916B_REG_IO_CONF1_i2c_thd1                       (1U<<5)

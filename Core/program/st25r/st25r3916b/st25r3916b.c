@@ -44,7 +44,7 @@ uint8_t ST25R3916B_Generic_IRQ_toErr(uint32_t irq)
 {
 	uint8_t status = ST25R_STATUS_NO_ERROR;
 
-	if(irq & ST25R3916B_IRQ_MASK_CAC)
+	if(irq & (ST25R3916B_IRQ_MASK_CAC | ST25R3916B_IRQ_MASK_COL))
 	{
 		status |= ST25R_STATUS_COLLISION;
 	}

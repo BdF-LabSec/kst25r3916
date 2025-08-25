@@ -24,8 +24,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "../program/board.h"
-#include "../program/st25r/st25r3916/14a/14a4_initiator.h"
-#include "../program/st25r/st25r3916/14a/14a3_target.h"
+#include "../program/st25r/st25r3916b/14a/14a4_initiator.h"
+#include "../program/st25r/st25r3916b/14a/14a3_target.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,7 +58,7 @@ ST25R nfc0 = {
 	.GPIO_Pin_CS = N0_CS_Pin,
 	.pSPI_Mutex = &SPI_Mutex,
 	.irqStatus = 0,
-	.irqMask = ST25R3916_IRQ_MASK_NONE,
+	.irqMask = 0,
 	.irqFlag = 0,
 };
 
@@ -68,7 +68,7 @@ ST25R nfc1 = {
 	.GPIO_Pin_CS = N1_CS_Pin,
 	.pSPI_Mutex = &SPI_Mutex,
 	.irqStatus = 0,
-	.irqMask = ST25R3916_IRQ_MASK_NONE,
+	.irqMask = 0,
 	.irqFlag = 0,
 };
 /* USER CODE END PV */
@@ -111,11 +111,7 @@ int main(void)
 	uint8_t ret;
 	T4A_INFOS tgInfos;
 	TARGET_STATE tgState;
-
-	uint8_t cbATS;
-	uint8_t ATS[20];
-	uint8_t FSD_Max = 8;
-	uint8_t RATS_Param;
+	uint8_t ATS[20], cbATS, FSD_Max = 8, RATS_Param;
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
@@ -150,26 +146,26 @@ int main(void)
 	TRACE_FLASH_Describe();
 	printf("\r\n");
 
-	ST25R3916_Init(&nfc0);
-	ST25R3916_14A_Initiator(&nfc0);
+	ST25R3916B_Init(&nfc0);
+	ST25R3916B_14A_Initiator(&nfc0);
 	printf("NFC #0 IC identity: %hu.%hu (0x%02hx) - initiator\r\n", nfc0.icIdentity >> ST25R_REG_IC_IDENTITY_shift_ic_type, nfc0.icIdentity & ST25R_REG_IC_IDENTITY_mask_ic_rev, nfc0.icIdentity);
 
-	ST25R3916_Init(&nfc1);
-	ST25R3916_14A_Target(&nfc1);
+	ST25R3916B_Init(&nfc1);
+	ST25R3916B_14A_Target(&nfc1);
 	printf("NFC #1 IC identity: %hu.%hu (0x%02hx) - target\r\n", nfc1.icIdentity >> ST25R_REG_IC_IDENTITY_shift_ic_type, nfc1.icIdentity & ST25R_REG_IC_IDENTITY_mask_ic_rev, nfc1.icIdentity);
 
-	ret = ST25R3916_FieldOn_AC(&nfc0);
+	ret = ST25R3916B_FieldOn_AC(&nfc0);
 	if (ret == ST25R_STATUS_NO_ERROR)
 	{
 		do
 		{
 			LED_ON(LED_GREEN);
-			ret = ST25R3916_14A_Anticoll(&nfc0, &tgInfos);
+			ret = ST25R3916B_14A_Anticoll(&nfc0, &tgInfos);
 			if (ret == ST25R_STATUS_NO_ERROR)
 			{
 				LED_OFF(LED_GREEN);
 
-				ST25R3916_14A3_Target_Prepare_AC_Buffer(&nfc1, &tgInfos.t3a);
+				ST25R3916B_14A3_Target_Prepare_AC_Buffer(&nfc1, &tgInfos.t3a);
 
 				printf("ATQA: 0x%04x / %02hx %02hx\r\nSAK : 0x%02hx\r\nUID : ", tgInfos.t3a.ATQA, ((uint8_t*) &tgInfos.t3a.ATQA)[0], ((uint8_t*) &tgInfos.t3a.ATQA)[1], tgInfos.t3a.SAK);
 				kprinthex(tgInfos.t3a.UID, tgInfos.t3a.cbUID);
@@ -202,48 +198,48 @@ int main(void)
 
 				if (ret == ST25R_STATUS_NO_ERROR)
 				{
-					ST25R3916_Write_SingleRegister(&nfc1, ST25R3916_REG_OP_CONTROL, ST25R3916_REG_OP_CONTROL_en | ST25R3916_REG_OP_CONTROL_en_fd_auto_efd | ST25R3916_REG_OP_CONTROL_rx_en);
-					ST25R3916_Write_SingleRegister(&nfc1, ST25R3916_REG_MODE, ST25R3916_REG_MODE_targ_targ | ST25R3916_REG_MODE_om_targ_nfca);
-					ST25R3916_Mask_IRQ(&nfc1, ~(ST25R3916_IRQ_MASK_COL | ST25R3916_IRQ_MASK_EON | ST25R3916_IRQ_MASK_EOF | ST25R3916_IRQ_MASK_CRC | ST25R3916_IRQ_MASK_PAR | ST25R3916_IRQ_MASK_ERR2 | ST25R3916_IRQ_MASK_ERR1 | ST25R3916_IRQ_MASK_WU_A | ST25R3916_IRQ_MASK_WU_A_X), ST25R_IRQ_MASK_OP_ADD);
+					ST25R3916B_Write_SingleRegister(&nfc1, ST25R3916B_REG_OP_CONTROL, ST25R3916B_REG_OP_CONTROL_en | ST25R3916B_REG_OP_CONTROL_en_fd_auto_efd | ST25R3916B_REG_OP_CONTROL_rx_en);
+					ST25R3916B_Write_SingleRegister(&nfc1, ST25R3916B_REG_MODE, ST25R3916B_REG_MODE_targ_targ | ST25R3916B_REG_MODE_om_targ_nfca);
+					ST25R3916B_Mask_IRQ(&nfc1, ~(ST25R3916B_IRQ_MASK_COL | ST25R3916B_IRQ_MASK_EON | ST25R3916B_IRQ_MASK_EOF | ST25R3916B_IRQ_MASK_CRC | ST25R3916B_IRQ_MASK_PAR | ST25R3916B_IRQ_MASK_ERR2 | ST25R3916B_IRQ_MASK_ERR1 | ST25R3916B_IRQ_MASK_WU_A | ST25R3916B_IRQ_MASK_WU_A_X), ST25R_IRQ_MASK_OP_ADD);
 
 					do{
-						ST25R3916_Mask_IRQ(&nfc1, ST25R3916_IRQ_MASK_TXE | ST25R3916_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_ADD);
-						ST25R3916_DirectCommand(&nfc1, ST25R3916_CMD_GOTO_SENSE);
+						ST25R3916B_Mask_IRQ(&nfc1, ST25R3916B_IRQ_MASK_TXE | ST25R3916B_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_ADD);
+						ST25R3916B_DirectCommand(&nfc1, ST25R3916B_CMD_GOTO_SENSE);
 
 						if(tgState != TARGET_STATE_IDLE)
 						{
 							if(tgState == TARGET_STATE_T4)
 							{
-								ST25R3916_14A4_Deselect(&nfc0);
+								ST25R3916B_14A4_Deselect(&nfc0);
 							}
 							else if(tgState == TARGET_STATE_T3)
 							{
-								ST25R3916_14A3_HLTA(&nfc0);
+								ST25R3916B_14A3_HLTA(&nfc0);
 							}
 
 							if(tgInfos.CurrentBitrate != ST25R_BITRATE_106)
 							{
-								ST25R3916_14A4_TxRx106(&nfc0);
+								ST25R3916B_14A4_TxRx106(&nfc0);
 								tgInfos.CurrentBitrate = ST25R_BITRATE_106;
 							}
-							ST25R3916_14A3_Anticoll(&nfc0, &tgInfos.t3a);
+							ST25R3916B_14A3_Anticoll(&nfc0, &tgInfos.t3a);
 							tgState = TARGET_STATE_IDLE;
 						}
 
 						do
 						{
-							ST25R3916_WaitForIRQ(&nfc1);
+							ST25R3916B_WaitForIRQ(&nfc1);
 							TRACE_RAM_Add(&nfc1, nfc1.irqStatus, NULL, 0);
 
-							if(nfc1.irqStatus & (ST25R3916_IRQ_MASK_WU_A | ST25R3916_IRQ_MASK_WU_A_X))
+							if(nfc1.irqStatus & (ST25R3916B_IRQ_MASK_WU_A | ST25R3916B_IRQ_MASK_WU_A_X))
 							{
-								ST25R3916_Mask_IRQ(&nfc1, ST25R3916_IRQ_MASK_TXE | ST25R3916_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_DEL);
-								ST25R3916_DirectCommand(&nfc1, ST25R3916_CMD_CLEAR_FIFO);
+								ST25R3916B_Mask_IRQ(&nfc1, ST25R3916B_IRQ_MASK_TXE | ST25R3916B_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_DEL);
+								ST25R3916B_DirectCommand(&nfc1, ST25R3916B_CMD_CLEAR_FIFO);
 								tgState = TARGET_STATE_T3;
 							}
-							else if(nfc1.irqStatus & ST25R3916_IRQ_MASK_RXE)
+							else if(nfc1.irqStatus & ST25R3916B_IRQ_MASK_RXE)
 							{
-								ret = ST25R3916_Receive_NoIRQ(&nfc1, 1);
+								ret = ST25R3916B_Receive_NoIRQ(&nfc1, 1);
 								if(ret == ST25R_STATUS_NO_ERROR)
 								{
 									TRACE_RAM_Add(&nfc1, nfc1.irqStatus, nfc1.pbData, nfc1.cbData);
@@ -253,21 +249,21 @@ int main(void)
 									}
 									else if ((nfc1.cbData == 1) && (nfc1.pbData[0] == K14A_DESELECT))
 									{
-										ST25R3916_Transmit(&nfc1, ST25R_14A4_DESELECT_data, sizeof(ST25R_14A4_DESELECT_data), 1);
+										ST25R3916B_Transmit(&nfc1, ST25R_14A4_DESELECT_data, sizeof(ST25R_14A4_DESELECT_data), 1);
 										TRACE_RAM_Add(&nfc1, nfc1.irqStatus, ST25R_14A4_DESELECT_data, sizeof(ST25R_14A4_DESELECT_data));
 										ret = ST25T_STATUS_APPLICATION;
 									}
 									else if ((nfc1.cbData == 2) && (nfc1.pbData[0] == K14A_RATS))
 									{
-										ret = ST25R3916_Transmit(&nfc1, ATS, cbATS, 1);
+										ret = ST25R3916B_Transmit(&nfc1, ATS, cbATS, 1);
 										TRACE_RAM_Add(&nfc1, nfc1.irqStatus, ATS, cbATS);
 										if(ret == ST25R_STATUS_NO_ERROR)
 										{
 											RATS_Param = (MIN(nfc1.pbData[1] >> 4, FSD_Max) << 4) | (nfc1.pbData[1] & 0b00001111);
-											ret = ST25R3916_14A4_Rats(&nfc0, RATS_Param/*nfc1.pbData[1]*/, &tgInfos);
+											ret = ST25R3916B_14A4_Rats(&nfc0, RATS_Param, &tgInfos);
 											if(ret == ST25R_STATUS_NO_ERROR)
 											{
-												ret = ST25R3916_14A4_AdjustBitRate(&nfc0, &tgInfos, ST25R_BITRATE_848);
+												ret = ST25R3916B_14A4_AdjustBitRate(&nfc0, &tgInfos, ST25R_BITRATE_848);
 												if(ret == ST25R_STATUS_NO_ERROR)
 												{
 													tgState = TARGET_STATE_T4;
@@ -277,10 +273,10 @@ int main(void)
 									}
 									else if(nfc1.cbData)
 									{
-										ret = ST25R3916_Transmit_then_Receive(&nfc0, nfc1.pbData, nfc1.cbData, 1);
+										ret = ST25R3916B_Transmit_then_Receive(&nfc0, nfc1.pbData, nfc1.cbData, 1);
 										if(ret == ST25R_STATUS_NO_ERROR)
 										{
-											ret = ST25R3916_Transmit(&nfc1, nfc0.pbData, nfc0.cbData, 1);
+											ret = ST25R3916B_Transmit(&nfc1, nfc0.pbData, nfc0.cbData, 1);
 											TRACE_RAM_Add(&nfc1, nfc1.irqStatus, nfc0.pbData, nfc0.cbData);
 										}
 									}
@@ -295,7 +291,7 @@ int main(void)
 									break;
 								}
 							}
-							else if(nfc1.irqStatus == ST25R3916_IRQ_MASK_EON) // TODO better
+							else if(nfc1.irqStatus == ST25R3916B_IRQ_MASK_EON) // TODO better
 							{
 								;
 							}
@@ -319,7 +315,7 @@ int main(void)
 		}
 		while(1);
 
-		ST25R3916_FieldOff(&nfc0);
+		ST25R3916B_FieldOff(&nfc0);
 	}
 
   /* USER CODE END 2 */
@@ -510,31 +506,18 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOF_CLK_ENABLE();
-  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
+  __HAL_RCC_GPIOE_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, N0_LED1_Pin|N0_LED4_Pin|N0_LED2_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LED_GREEN_Pin|N0_LED3_Pin|LED_RED_Pin|N1_LED6_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(N0_LED5_GPIO_Port, N0_LED5_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, N1_LED2_Pin|N1_LED4_Pin|N1_LED3_Pin|LED_YELLOW_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, LED_GREEN_Pin|LED_RED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, N0_CS_Pin|N1_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(N1_LED1_GPIO_Port, N1_LED1_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOG, N0_LED6_Pin|N1_LED5_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LED_YELLOW_GPIO_Port, LED_YELLOW_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : BUTTON_Pin */
   GPIO_InitStruct.Pin = BUTTON_Pin;
@@ -542,39 +525,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(BUTTON_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : N0_LED1_Pin N0_LED4_Pin N0_LED2_Pin */
-  GPIO_InitStruct.Pin = N0_LED1_Pin|N0_LED4_Pin|N0_LED2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
   /*Configure GPIO pin : N0_IRQ_Pin */
   GPIO_InitStruct.Pin = N0_IRQ_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(N0_IRQ_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LED_GREEN_Pin N0_LED3_Pin LED_RED_Pin N1_LED6_Pin */
-  GPIO_InitStruct.Pin = LED_GREEN_Pin|N0_LED3_Pin|LED_RED_Pin|N1_LED6_Pin;
+  /*Configure GPIO pins : LED_GREEN_Pin LED_RED_Pin */
+  GPIO_InitStruct.Pin = LED_GREEN_Pin|LED_RED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : N0_LED5_Pin */
-  GPIO_InitStruct.Pin = N0_LED5_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(N0_LED5_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : N1_LED2_Pin N1_LED4_Pin N1_LED3_Pin LED_YELLOW_Pin */
-  GPIO_InitStruct.Pin = N1_LED2_Pin|N1_LED4_Pin|N1_LED3_Pin|LED_YELLOW_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
   /*Configure GPIO pins : N0_CS_Pin N1_CS_Pin */
   GPIO_InitStruct.Pin = N0_CS_Pin|N1_CS_Pin;
@@ -583,31 +545,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : N1_LED1_Pin */
-  GPIO_InitStruct.Pin = N1_LED1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(N1_LED1_GPIO_Port, &GPIO_InitStruct);
-
   /*Configure GPIO pin : N1_IRQ_Pin */
   GPIO_InitStruct.Pin = N1_IRQ_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(N1_IRQ_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : N0_LED6_Pin N1_LED5_Pin */
-  GPIO_InitStruct.Pin = N0_LED6_Pin|N1_LED5_Pin;
+  /*Configure GPIO pin : LED_YELLOW_Pin */
+  GPIO_InitStruct.Pin = LED_YELLOW_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-
-  /*AnalogSwitch Config */
-  HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC2, SYSCFG_SWITCH_PC2_CLOSE);
-
-  /*AnalogSwitch Config */
-  HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC3, SYSCFG_SWITCH_PC3_CLOSE);
+  HAL_GPIO_Init(LED_YELLOW_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(N0_IRQ_EXTI_IRQn, 0, 0);

@@ -39,6 +39,8 @@ typedef struct _T4A_INFOS {
 	uint8_t cbATS;
 	uint8_t ATS[20];
 
+	uint8_t CID;
+
 	uint8_t FSCI;
 	uint16_t MaxFrameSize;
 
@@ -52,6 +54,7 @@ typedef struct _T4A_INFOS {
 	ST25R_BITRATE CurrentBitrate;
 } T4A_INFOS, *PT4A_INFOS;
 
+extern const uint8_t ST25R_14A3_WUPA_data[1];
 extern const uint8_t ST25R_14A3_HLTA_data[2];
 extern const uint8_t ST25R_14A4_DESELECT_data[1];
 

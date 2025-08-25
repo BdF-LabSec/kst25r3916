@@ -5,6 +5,7 @@
 */
 #include "14a.h"
 
+const uint8_t ST25R_14A3_WUPA_data[1] = {K14A_ALL_REQ__WUPA};
 const uint8_t ST25R_14A3_HLTA_data[2] = {K14A_HLTA, K14A_HLTA_2};
 const uint8_t ST25R_14A4_DESELECT_data[1] = {K14A_DESELECT};
 
