@@ -21,11 +21,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
-#include <string.h>
 #include "../program/board.h"
-#include "../program/st25r/st25r3916b/14a/14a4_initiator.h"
-#include "../program/st25r/st25r3916b/14a/14a3_target.h"
+//#include "../program/example_relay_st25r500.h"
+#include "../program/example_relay_st25r3916b.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -80,7 +78,7 @@ static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
-void kprinthex(const void *lpData, const uint16_t cbData);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -92,12 +90,6 @@ const char KIWI_BANNER[] = 	"\x1b[2J\x1b[3J\x1b[H\r\n"
 	" ## \\ / | K  |     Benjamin DELPY `gentilkiwi` ( benjamin@gentilkiwi.com )\r\n"
 	" '## v #\\____/\r\n"
 	"  '#####' L\\_      ***/\r\n";
-
-typedef enum _TARGET_STATE {
-	TARGET_STATE_IDLE = 0,
-	TARGET_STATE_T3	= 1,
-	TARGET_STATE_T4 = 2,
-} TARGET_STATE, *PTARGET_STATE;
 /* USER CODE END 0 */
 
 /**
@@ -108,10 +100,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-	uint8_t ret;
-	T4A_INFOS tgInfos;
-	TARGET_STATE tgState;
-	uint8_t ATS[20], cbATS, FSD_Max = 8, RATS_Param;
+
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
@@ -146,178 +135,8 @@ int main(void)
 	TRACE_FLASH_Describe();
 	printf("\r\n");
 
-	ST25R3916B_Init(&nfc0);
-	ST25R3916B_14A_Initiator(&nfc0);
-	printf("NFC #0 IC identity: %hu.%hu (0x%02hx) - initiator\r\n", nfc0.icIdentity >> ST25R_REG_IC_IDENTITY_shift_ic_type, nfc0.icIdentity & ST25R_REG_IC_IDENTITY_mask_ic_rev, nfc0.icIdentity);
-
-	ST25R3916B_Init(&nfc1);
-	ST25R3916B_14A_Target(&nfc1);
-	printf("NFC #1 IC identity: %hu.%hu (0x%02hx) - target\r\n", nfc1.icIdentity >> ST25R_REG_IC_IDENTITY_shift_ic_type, nfc1.icIdentity & ST25R_REG_IC_IDENTITY_mask_ic_rev, nfc1.icIdentity);
-
-	ret = ST25R3916B_FieldOn_AC(&nfc0);
-	if (ret == ST25R_STATUS_NO_ERROR)
-	{
-		do
-		{
-			LED_ON(LED_GREEN);
-			ret = ST25R3916B_14A_Anticoll(&nfc0, &tgInfos);
-			if (ret == ST25R_STATUS_NO_ERROR)
-			{
-				LED_OFF(LED_GREEN);
-
-				ST25R3916B_14A3_Target_Prepare_AC_Buffer(&nfc1, &tgInfos.t3a);
-
-				printf("ATQA: 0x%04x / %02hx %02hx\r\nSAK : 0x%02hx\r\nUID : ", tgInfos.t3a.ATQA, ((uint8_t*) &tgInfos.t3a.ATQA)[0], ((uint8_t*) &tgInfos.t3a.ATQA)[1], tgInfos.t3a.SAK);
-				kprinthex(tgInfos.t3a.UID, tgInfos.t3a.cbUID);
-				if (tgInfos.t3a.SAK & 0x20)
-				{
-					printf("ATS : ");
-					kprinthex(tgInfos.ATS, tgInfos.cbATS);
-
-					printf("| MaxFrameSize         : %u - FSCI: %hu\r\n", tgInfos.MaxFrameSize, tgInfos.FSCI);
-					printf("| FrameWaitingTime     : %u (4096/fc) - FWI: %hu\r\n", 1 << tgInfos.FWI, tgInfos.FWI);
-					printf("| StartupFrameGuardTime: %u (4096/fc) - SFGI: %hu\r\n", 1 << tgInfos.SFGI, tgInfos.SFGI);
-					printf("| Max bitrate          : %u kbps\r\n", ST25R_BITRATE_TO_KBPS(tgInfos.MaxBitRate));
-
-					memcpy(ATS, tgInfos.ATS, tgInfos.cbATS);
-					cbATS = tgInfos.cbATS;
-
-					ATS[1] = (ATS[1] & 0xf0) | MIN(tgInfos.FSCI, FSD_Max);
-					ATS[2] = 0x80;
-					ATS[3] += 0b00010001;
-					printf("ATS*: ");
-					kprinthex(ATS, cbATS);
-
-					tgState = TARGET_STATE_T4;
-				}
-				else
-				{
-					tgState = TARGET_STATE_T3;
-					cbATS = 0;
-				}
-
-				if (ret == ST25R_STATUS_NO_ERROR)
-				{
-					ST25R3916B_Write_SingleRegister(&nfc1, ST25R3916B_REG_OP_CONTROL, ST25R3916B_REG_OP_CONTROL_en | ST25R3916B_REG_OP_CONTROL_en_fd_auto_efd | ST25R3916B_REG_OP_CONTROL_rx_en);
-					ST25R3916B_Write_SingleRegister(&nfc1, ST25R3916B_REG_MODE, ST25R3916B_REG_MODE_targ_targ | ST25R3916B_REG_MODE_om_targ_nfca);
-					ST25R3916B_Mask_IRQ(&nfc1, ~(ST25R3916B_IRQ_MASK_COL | ST25R3916B_IRQ_MASK_EON | ST25R3916B_IRQ_MASK_EOF | ST25R3916B_IRQ_MASK_CRC | ST25R3916B_IRQ_MASK_PAR | ST25R3916B_IRQ_MASK_ERR2 | ST25R3916B_IRQ_MASK_ERR1 | ST25R3916B_IRQ_MASK_WU_A | ST25R3916B_IRQ_MASK_WU_A_X), ST25R_IRQ_MASK_OP_ADD);
-
-					do{
-						ST25R3916B_Mask_IRQ(&nfc1, ST25R3916B_IRQ_MASK_TXE | ST25R3916B_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_ADD);
-						ST25R3916B_DirectCommand(&nfc1, ST25R3916B_CMD_GOTO_SENSE);
-
-						if(tgState != TARGET_STATE_IDLE)
-						{
-							if(tgState == TARGET_STATE_T4)
-							{
-								ST25R3916B_14A4_Deselect(&nfc0);
-							}
-							else if(tgState == TARGET_STATE_T3)
-							{
-								ST25R3916B_14A3_HLTA(&nfc0);
-							}
-
-							if(tgInfos.CurrentBitrate != ST25R_BITRATE_106)
-							{
-								ST25R3916B_14A4_TxRx106(&nfc0);
-								tgInfos.CurrentBitrate = ST25R_BITRATE_106;
-							}
-							ST25R3916B_14A3_Anticoll(&nfc0, &tgInfos.t3a);
-							tgState = TARGET_STATE_IDLE;
-						}
-
-						do
-						{
-							ST25R3916B_WaitForIRQ(&nfc1);
-							TRACE_RAM_Add(&nfc1, nfc1.irqStatus, NULL, 0);
-
-							if(nfc1.irqStatus & (ST25R3916B_IRQ_MASK_WU_A | ST25R3916B_IRQ_MASK_WU_A_X))
-							{
-								ST25R3916B_Mask_IRQ(&nfc1, ST25R3916B_IRQ_MASK_TXE | ST25R3916B_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_DEL);
-								ST25R3916B_DirectCommand(&nfc1, ST25R3916B_CMD_CLEAR_FIFO);
-								tgState = TARGET_STATE_T3;
-							}
-							else if(nfc1.irqStatus & ST25R3916B_IRQ_MASK_RXE)
-							{
-								ret = ST25R3916B_Receive_NoIRQ(&nfc1, 1);
-								if(ret == ST25R_STATUS_NO_ERROR)
-								{
-									TRACE_RAM_Add(&nfc1, nfc1.irqStatus, nfc1.pbData, nfc1.cbData);
-									if ((nfc1.cbData == 2) && (nfc1.pbData[0] == K14A_HLTA) && (nfc1.pbData[1] == K14A_HLTA_2))
-									{
-										ret = ST25T_STATUS_APPLICATION;
-									}
-									else if ((nfc1.cbData == 1) && (nfc1.pbData[0] == K14A_DESELECT))
-									{
-										ST25R3916B_Transmit(&nfc1, ST25R_14A4_DESELECT_data, sizeof(ST25R_14A4_DESELECT_data), 1);
-										TRACE_RAM_Add(&nfc1, nfc1.irqStatus, ST25R_14A4_DESELECT_data, sizeof(ST25R_14A4_DESELECT_data));
-										ret = ST25T_STATUS_APPLICATION;
-									}
-									else if ((nfc1.cbData == 2) && (nfc1.pbData[0] == K14A_RATS))
-									{
-										ret = ST25R3916B_Transmit(&nfc1, ATS, cbATS, 1);
-										TRACE_RAM_Add(&nfc1, nfc1.irqStatus, ATS, cbATS);
-										if(ret == ST25R_STATUS_NO_ERROR)
-										{
-											RATS_Param = (MIN(nfc1.pbData[1] >> 4, FSD_Max) << 4) | (nfc1.pbData[1] & 0b00001111);
-											ret = ST25R3916B_14A4_Rats(&nfc0, RATS_Param, &tgInfos);
-											if(ret == ST25R_STATUS_NO_ERROR)
-											{
-												ret = ST25R3916B_14A4_AdjustBitRate(&nfc0, &tgInfos, ST25R_BITRATE_848);
-												if(ret == ST25R_STATUS_NO_ERROR)
-												{
-													tgState = TARGET_STATE_T4;
-												}
-											}
-										}
-									}
-									else if(nfc1.cbData)
-									{
-										ret = ST25R3916B_Transmit_then_Receive(&nfc0, nfc1.pbData, nfc1.cbData, 1);
-										if(ret == ST25R_STATUS_NO_ERROR)
-										{
-											ret = ST25R3916B_Transmit(&nfc1, nfc0.pbData, nfc0.cbData, 1);
-											TRACE_RAM_Add(&nfc1, nfc1.irqStatus, nfc0.pbData, nfc0.cbData);
-										}
-									}
-									else
-									{
-										ret = ST25T_STATUS_BUFFER_ERR;
-									}
-								}
-
-								if(ret != ST25R_STATUS_NO_ERROR)
-								{
-									break;
-								}
-							}
-							else if(nfc1.irqStatus == ST25R3916B_IRQ_MASK_EON) // TODO better
-							{
-								;
-							}
-							else
-							{
-								break;
-							}
-
-						} while(1);
-
-					} while(1);
-				}
-			}
-			else
-			{
-				printf("Error: 0x%02hx\r\n", ret);
-				HAL_Delay(500);
-				LED_OFF(LED_GREEN);
-				HAL_Delay(500);
-			}
-		}
-		while(1);
-
-		ST25R3916B_FieldOff(&nfc0);
-	}
-
+	//Example_Relay_ST25R500(&nfc0, &nfc1);
+	Example_Relay_ST25R3916B(&nfc0, &nfc1);
   /* USER CODE END 2 */
 
   /* Infinite loop */

@@ -79,6 +79,23 @@ void TRACE_FLASH_IRQ_Describe(uint32_t irq)
 	}
 }
 
+const char * IRQ_DESC_500[] = {
+	"RX_ERR", "TXE", "RXS", "RXE", "RX_REST", "WL", "COL", "SUBC_START",
+	"NFCT", "RXE_CE", "CE_SC", "RFU", "WPT_FOD", "WPT_STOP", "NRE", "GPE",
+	"OSC", "WUT", "WUI", "WUQ", "DCT", "EON", "EOF", "WUTME",
+};
+void TRACE_FLASH_IRQ_Describe_500(uint32_t irq)
+{
+	uint8_t i;
+	for(i = 0; i < ((sizeof(uint32_t) - 1) * 8); i++)
+	{
+		if(irq & ((uint32_t) 1 << i))
+		{
+			printf("%s ; ", IRQ_DESC_500[i]);
+		}
+	}
+}
+
 void TRACE_FLASH_Describe()
 {
 	uint32_t i, FLASH_TRACE_CB = *(uint32_t *) FLASH_TRACE;
@@ -89,8 +106,9 @@ void TRACE_FLASH_Describe()
 	for(i = 0; i < FLASH_TRACE_CB; i += __align_up(sizeof(TRACE_DATA) + pData->optionalCbData, __alignof__(TRACE_DATA)))
 	{
 		pData = (PTRACE_DATA) (FLASH_TRACE + sizeof(uint32_t) + i);
-		printf("%6lu 0x%08lx ", pData->timestamp, pData->irq); // pData->source
-		TRACE_FLASH_IRQ_Describe(pData->irq);
+		//printf("%p - %6lu 0x%08lx ", pData->source, pData->timestamp, pData->irq);
+		printf("%6lu 0x%06lx ", pData->timestamp, pData->irq);
+		TRACE_FLASH_IRQ_Describe_500(pData->irq);
 		if(pData->optionalCbData)
 		{
 			kprinthex(pData + 1, pData->optionalCbData);

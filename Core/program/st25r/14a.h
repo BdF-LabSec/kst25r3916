@@ -54,6 +54,12 @@ typedef struct _T4A_INFOS {
 	ST25R_BITRATE CurrentBitrate;
 } T4A_INFOS, *PT4A_INFOS;
 
+typedef enum _TARGET_STATE {
+	TARGET_STATE_IDLE = 0,
+	TARGET_STATE_T3	= 1,
+	TARGET_STATE_T4 = 2,
+} TARGET_STATE, *PTARGET_STATE;
+
 extern const uint8_t ST25R_14A3_WUPA_data[1];
 extern const uint8_t ST25R_14A3_HLTA_data[2];
 extern const uint8_t ST25R_14A4_DESELECT_data[1];

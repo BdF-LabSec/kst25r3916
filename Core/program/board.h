@@ -5,6 +5,7 @@
 */
 #pragma once
 #include "main.h"
+#include <stdio.h>
 #include "st25r/st25r.h"
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))

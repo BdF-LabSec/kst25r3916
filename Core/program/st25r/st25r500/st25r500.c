@@ -22,7 +22,7 @@ void ST25R500_Init(ST25R *pInstance)
 
 	ST25R500_Write_SingleRegister(pInstance, ST25R500_REG_REGULATOR, 0x00);
 	ST25R500_Write_SingleRegister(pInstance, ST25R500_REG_OPERATION, ST25R500_REG_OPERATION_en | ST25R500_REG_OPERATION_vdddr_en);
-	HAL_Delay(1); // TODO better !!! (10µS)
+	HAL_Delay(0); // TODO better !!! (10µS)
 	ST25R500_Write_SingleRegister(pInstance, ST25R500_REG_OPERATION, ST25R500_REG_OPERATION_en | ST25R500_REG_OPERATION_vdddr_en | ST25R500_REG_OPERATION_rx_en | ST25R500_REG_OPERATION_tx_en);
 	ST25R500_DirectCommand(pInstance, ST25R500_CMD_ADJUST_REGULATORS);
 	ST25R500_WaitForIRQ(pInstance);
