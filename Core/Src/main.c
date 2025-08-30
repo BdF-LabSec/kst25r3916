@@ -21,9 +21,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "../program/board.h"
-//#include "../program/example_relay_st25r500.h"
-#include "../program/example_relay_st25r3916b.h"
+#include "../program/example_relay_st25r500.h"
+//#include "../program/example_relay_st25r3916b.h"
+//#include "../program/example_relay_st25r3916.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -131,12 +131,11 @@ int main(void)
 	//printf("Device ID   : 0x%04x rev: 0x%04x\r\n", (uint16_t )HAL_GetDEVID(), (uint16_t ) HAL_GetREVID());
 	printf("Flash size  : %hu Kbytes\r\n", *(const uint16_t*)FLASHSIZE_BASE);
 	printf("Device UID  : 0x%08lx%08lx%08lx\r\n", HAL_GetUIDw0(), HAL_GetUIDw1(), HAL_GetUIDw2());
-	printf("SysClockFreq: %lu MHz\r\n", HAL_RCC_GetSysClockFreq() / 1000 / 1000);
-	TRACE_FLASH_Describe();
-	printf("\r\n");
+	printf("SysClockFreq: %lu MHz\r\n\r\n", HAL_RCC_GetSysClockFreq() / 1000 / 1000);
 
-	//Example_Relay_ST25R500(&nfc0, &nfc1);
-	Example_Relay_ST25R3916B(&nfc0, &nfc1);
+	Example_Relay_ST25R500(&nfc0, &nfc1);
+	//Example_Relay_ST25R3916B(&nfc0, &nfc1);
+	//Example_Relay_ST25R3916(&nfc0, &nfc1);
   /* USER CODE END 2 */
 
   /* Infinite loop */

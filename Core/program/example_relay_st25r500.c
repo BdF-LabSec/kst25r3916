@@ -6,12 +6,18 @@
 #include "st25r/st25r500/14a/14a4_initiator.h"
 #include "st25r/st25r500/14a/14a3_target.h"
 
+
+const char EXAMPLE_RELAY_ST25R500_BANNER[] = "> Relay for 14A4 ( ST25R500 / ST25R300 / ST25R501 )\r\n";
+
 void Example_Relay_ST25R500(ST25R *pReader, ST25R *pEmulator)
 {
 	uint8_t ret, ce_status;
 	T4A_INFOS tgInfos;
 	TARGET_STATE tgState;
 	uint8_t FSD_Max = 8, RATS_Param;
+
+	puts(EXAMPLE_RELAY_ST25R500_BANNER);
+	TRACE_FLASH_Describe(TRACE_FLASH_IRQ_Describe_ST25R500);
 
 	ST25R500_Init(pReader);
 	ST25R500_14A_Initiator(pReader);
@@ -34,8 +40,10 @@ void Example_Relay_ST25R500(ST25R *pReader, ST25R *pEmulator)
 
 				printf("ATQA: 0x%04x / %02hx %02hx\r\nSAK : 0x%02hx\r\nUID : ", tgInfos.t3a.ATQA, ((uint8_t*) &tgInfos.t3a.ATQA)[0], ((uint8_t*) &tgInfos.t3a.ATQA)[1], tgInfos.t3a.SAK);
 				kprinthex(tgInfos.t3a.UID, tgInfos.t3a.cbUID);
-				if (tgInfos.t3a.SAK & 0x20)
+				if (tgInfos.t3a.SAK & 0x20) // we need 4A for this relay flavor (ST25R500_REG_CE_CONFIG1_en_ce4a)
 				{
+					tgState = TARGET_STATE_T4;
+
 					printf("ATS : ");
 					kprinthex(tgInfos.ATS, tgInfos.cbATS);
 
@@ -51,22 +59,16 @@ void Example_Relay_ST25R500(ST25R *pReader, ST25R *pEmulator)
 					printf("ATS*: ");
 					kprinthex(tgInfos.ATS, tgInfos.cbATS);
 
-					tgState = TARGET_STATE_T4;
-					ST25R500_14A4_Target_Prepare_AC_Buffer(pEmulator, &tgInfos);
-				}
-				else
-				{
-					ret = ST25T_STATUS_APPLICATION;
-				}
+					ST25R500_14A4_Target_Prepare_AC_Buffer(pEmulator, &tgInfos); // we'll let the chip to handle RATS
 
-				if (ret == ST25R_STATUS_NO_ERROR)
-				{
 					ST25R500_Write_SingleRegister(pEmulator, ST25R500_REG_OPERATION, ST25R500_REG_OPERATION_en | ST25R500_REG_OPERATION_rx_en | ST25R500_REG_OPERATION_ce_en);
 					ST25R500_Write_SingleRegister(pEmulator, ST25R500_REG_CE_CONFIG1, ST25R500_REG_CE_CONFIG1_en_ce4a | ST25R500_REG_CE_CONFIG1_en_106_ac_a);
 					ST25R500_Mask_IRQ(pEmulator, ~(ST25R500_IRQ_MASK_COL | ST25R500_IRQ_MASK_EON | ST25R500_IRQ_MASK_EOF | ST25R500_IRQ_MASK_RX_ERR | ST25R500_IRQ_MASK_CE_SC), ST25R_IRQ_MASK_OP_ADD);
 
-					do{
+					do
+					{
 						ST25R500_Mask_IRQ(pEmulator, ST25R500_IRQ_MASK_TXE | ST25R500_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_ADD);
+
 						if(tgState != TARGET_STATE_IDLE)
 						{
 							if(tgState == TARGET_STATE_T4)
@@ -162,7 +164,6 @@ void Example_Relay_ST25R500(ST25R *pReader, ST25R *pEmulator)
 
 					} while(1);
 				}
-
 			}
 			else
 			{
@@ -171,8 +172,8 @@ void Example_Relay_ST25R500(ST25R *pReader, ST25R *pEmulator)
 				LED_OFF(LED_GREEN);
 				HAL_Delay(500);
 			}
-		}
-		while(1);
+
+		} while(1);
 
 		ST25R500_FieldOff(pReader);
 	}

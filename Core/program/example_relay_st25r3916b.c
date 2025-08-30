@@ -7,12 +7,17 @@
 #include "st25r/st25r3916b/14a/14a3_target.h"
 #include <string.h>
 
+const char EXAMPLE_RELAY_ST25R3916B_BANNER[] = "> Relay for 14A4 ( ST25R3916B / ST25R3917B / ST25R3919B / ST25R3920B )\r\n";
+
 void Example_Relay_ST25R3916B(ST25R *pReader, ST25R *pEmulator)
 {
 	uint8_t ret;
 	T4A_INFOS tgInfos;
 	TARGET_STATE tgState;
 	uint8_t ATS[20], cbATS, FSD_Max = 8, RATS_Param;
+
+	puts(EXAMPLE_RELAY_ST25R3916B_BANNER);
+	TRACE_FLASH_Describe(TRACE_FLASH_IRQ_Describe_ST25R3916B);
 
 	ST25R3916B_Init(pReader);
 	ST25R3916B_14A_Initiator(pReader);
@@ -39,6 +44,8 @@ void Example_Relay_ST25R3916B(ST25R *pReader, ST25R *pEmulator)
 				kprinthex(tgInfos.t3a.UID, tgInfos.t3a.cbUID);
 				if (tgInfos.t3a.SAK & 0x20)
 				{
+					tgState = TARGET_STATE_T4;
+
 					printf("ATS : ");
 					kprinthex(tgInfos.ATS, tgInfos.cbATS);
 
@@ -47,7 +54,7 @@ void Example_Relay_ST25R3916B(ST25R *pReader, ST25R *pEmulator)
 					printf("| StartupFrameGuardTime: %u (4096/fc) - SFGI: %hu\r\n", 1 << tgInfos.SFGI, tgInfos.SFGI);
 					printf("| Max bitrate          : %u kbps\r\n", ST25R_BITRATE_TO_KBPS(tgInfos.MaxBitRate));
 
-					memcpy(ATS, tgInfos.ATS, tgInfos.cbATS);
+					memcpy(ATS, tgInfos.ATS, tgInfos.cbATS); // we use another variable as tgInfos will be reused and we need to send back modified ATS
 					cbATS = tgInfos.cbATS;
 
 					ATS[1] = (ATS[1] & 0xf0) | MIN(tgInfos.FSCI, FSD_Max);
@@ -55,8 +62,6 @@ void Example_Relay_ST25R3916B(ST25R *pReader, ST25R *pEmulator)
 					ATS[3] += 0b00010001;
 					printf("ATS*: ");
 					kprinthex(ATS, cbATS);
-
-					tgState = TARGET_STATE_T4;
 				}
 				else
 				{
@@ -90,8 +95,11 @@ void Example_Relay_ST25R3916B(ST25R *pReader, ST25R *pEmulator)
 								ST25R3916B_14A4_TxRx106(pReader);
 								tgInfos.CurrentBitrate = ST25R_BITRATE_106;
 							}
-							ST25R3916B_14A3_Anticoll(pReader, &tgInfos.t3a);
-							tgState = TARGET_STATE_IDLE;
+							ret = ST25R3916B_14A3_Anticoll(pReader, &tgInfos.t3a);
+							if (ret == ST25R_STATUS_NO_ERROR)
+							{
+								tgState = TARGET_STATE_T3;
+							}
 						}
 
 						do
@@ -102,8 +110,6 @@ void Example_Relay_ST25R3916B(ST25R *pReader, ST25R *pEmulator)
 							if(pEmulator->irqStatus & (ST25R3916B_IRQ_MASK_WU_A | ST25R3916B_IRQ_MASK_WU_A_X))
 							{
 								ST25R3916B_Mask_IRQ(pEmulator, ST25R3916B_IRQ_MASK_TXE | ST25R3916B_IRQ_MASK_RXE, ST25R_IRQ_MASK_OP_DEL);
-								ST25R3916B_DirectCommand(pEmulator, ST25R3916B_CMD_CLEAR_FIFO);
-								tgState = TARGET_STATE_T3;
 							}
 							else if(pEmulator->irqStatus & ST25R3916B_IRQ_MASK_RXE)
 							{
@@ -180,8 +186,8 @@ void Example_Relay_ST25R3916B(ST25R *pReader, ST25R *pEmulator)
 				LED_OFF(LED_GREEN);
 				HAL_Delay(500);
 			}
-		}
-		while(1);
+
+		} while(1);
 
 		ST25R3916B_FieldOff(pReader);
 	}

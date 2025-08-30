@@ -19,7 +19,15 @@
 #define TRACE_SIZE			(TRACE_NB_SECTORS * FLASH_SECTOR_SIZE)
 
 void TRACE_RAM_Add(const void *source, const uint32_t irq, const uint8_t *pbData, const uint16_t cbData);
-void TRACE_FLASH_Describe();
+
+typedef void(*PTRACE_FLASH_IRQ_DESCRIBE_FUNCTION) (uint32_t irq);
+
+void TRACE_FLASH_IRQ_Describe_ST25R3911B(uint32_t irq);
+void TRACE_FLASH_IRQ_Describe_ST25R3916(uint32_t irq);
+void TRACE_FLASH_IRQ_Describe_ST25R3916B(uint32_t irq);
+void TRACE_FLASH_IRQ_Describe_ST25R500(uint32_t irq);
+
+void TRACE_FLASH_Describe(PTRACE_FLASH_IRQ_DESCRIBE_FUNCTION DescribeFunction);
 HAL_StatusTypeDef TRACE_FLASH_Erase();
 HAL_StatusTypeDef TRACE_FLASH_Save();
 

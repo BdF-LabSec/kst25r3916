@@ -61,42 +61,60 @@ void TRACE_RAM_Add(const void *source, const uint32_t irq, const uint8_t *pbData
 	*pRAM_TRACE_CB +=  __align_up(sizeof(TRACE_DATA) + pData->optionalCbData, __alignof__(TRACE_DATA));
 }
 
-const char * IRQ_DESC[] = {
+const char * IRQ_DESC_ST25R3916[] = {
 	"RFU", "RX_REST", "COL", "TXE", "RXE", "RXS", "FWL", "OSC",
 	"NFCT", "CAT", "CAC", "EOF", "EON", "GPE", "NRE", "DCT",
 	"WCAP", "WPH", "WAM", "WT", "ERR1", "ERR2", "PAR", "CRC",
 	"WU_A", "WU_A_X", "RFU2", "WU_F", "RXE_PTA", "APON", "SL_WL", "PPON2",
 };
-void TRACE_FLASH_IRQ_Describe(uint32_t irq)
+void TRACE_FLASH_IRQ_Describe_ST25R3916(uint32_t irq)
 {
 	uint8_t i;
 	for(i = 0; i < (sizeof(uint32_t) * 8); i++)
 	{
 		if(irq & ((uint32_t) 1 << i))
 		{
-			printf("%s ; ", IRQ_DESC[i]);
+			printf("%s ; ", IRQ_DESC_ST25R3916[i]);
 		}
 	}
 }
 
-const char * IRQ_DESC_500[] = {
+const char * IRQ_DESC_ST25R3916B[] = {
+	"RFU", "RX_REST", "COL", "TXE", "RXE", "RXS", "FWL", "OSC",
+	"NFCT", "CAT", "CAC", "EOF", "EON", "GPE", "NRE", "DCT",
+	"RFU", "WPH", "WAM", "WT", "ERR1", "ERR2", "PAR", "CRC",
+	"WU_A", "WU_A_X", "RFU", "WU_F", "RXE_PTA", "APON", "SL_WL", "PPON2",
+};
+void TRACE_FLASH_IRQ_Describe_ST25R3916B(uint32_t irq)
+{
+	uint8_t i;
+	for(i = 0; i < (sizeof(uint32_t) * 8); i++)
+	{
+		if(irq & ((uint32_t) 1 << i))
+		{
+			printf("%s ; ", IRQ_DESC_ST25R3916B[i]);
+		}
+	}
+}
+
+const char * IRQ_DESC_ST25R500[] = {
 	"RX_ERR", "TXE", "RXS", "RXE", "RX_REST", "WL", "COL", "SUBC_START",
 	"NFCT", "RXE_CE", "CE_SC", "RFU", "WPT_FOD", "WPT_STOP", "NRE", "GPE",
 	"OSC", "WUT", "WUI", "WUQ", "DCT", "EON", "EOF", "WUTME",
 };
-void TRACE_FLASH_IRQ_Describe_500(uint32_t irq)
+void TRACE_FLASH_IRQ_Describe_ST25R500(uint32_t irq)
 {
 	uint8_t i;
 	for(i = 0; i < ((sizeof(uint32_t) - 1) * 8); i++)
 	{
 		if(irq & ((uint32_t) 1 << i))
 		{
-			printf("%s ; ", IRQ_DESC_500[i]);
+			printf("%s ; ", IRQ_DESC_ST25R500[i]);
 		}
 	}
 }
 
-void TRACE_FLASH_Describe()
+void TRACE_FLASH_Describe(PTRACE_FLASH_IRQ_DESCRIBE_FUNCTION DescribeFunction)
 {
 	uint32_t i, FLASH_TRACE_CB = *(uint32_t *) FLASH_TRACE;
 	const TRACE_DATA *pData;
@@ -108,7 +126,10 @@ void TRACE_FLASH_Describe()
 		pData = (PTRACE_DATA) (FLASH_TRACE + sizeof(uint32_t) + i);
 		//printf("%p - %6lu 0x%08lx ", pData->source, pData->timestamp, pData->irq);
 		printf("%6lu 0x%06lx ", pData->timestamp, pData->irq);
-		TRACE_FLASH_IRQ_Describe_500(pData->irq);
+		if(DescribeFunction)
+		{
+			DescribeFunction(pData->irq);
+		}
 		if(pData->optionalCbData)
 		{
 			kprinthex(pData + 1, pData->optionalCbData);
@@ -118,6 +139,7 @@ void TRACE_FLASH_Describe()
 			printf("\r\n");
 		}
 	}
+	printf("\r\n");
 }
 
 HAL_StatusTypeDef TRACE_FLASH_Save()

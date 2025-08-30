@@ -81,3 +81,9 @@ void ST25R_SPI_Write_IRQ_Mask_Operation_internal(ST25R *pInstance, const uint32_
 
 #define ST25R_REG_IC_IDENTITY_shift_ic_type	(3U)
 #define ST25R_REG_IC_IDENTITY_mask_ic_rev	(7U)
+
+typedef struct _ST25R_REG_DEFINITION {
+	const uint8_t reg;
+	const uint8_t defaultValue;
+	const char *name;
+} ST25R_REG_DEFINITION;
